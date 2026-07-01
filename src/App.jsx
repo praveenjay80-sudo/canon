@@ -172,14 +172,13 @@ export default function App() {
   }
 
   function handleClickSubfield(parent, sf) {
-    enrichment.clear();
     fieldNav.clickSubfield(parent, sf);
-    gen.generateCanon(sf, 'subfield');
   }
 
   function handleClickSubSubfield(ssf) {
     enrichment.clear();
     gen.generateCanon(ssf, 'subfield');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function handleSave() {
