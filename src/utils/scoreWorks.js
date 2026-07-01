@@ -1,23 +1,27 @@
 // Composite scoring for harvested works.
 // Papers: weighted toward influential citations + raw citations + cross-source presence
-// Books:  weighted toward edition count (canonicity) + cross-source presence + citations
+// Books:  weighted toward edition count (canonicity) + ratings (textbook adoption) + citations
 
 function logNorm(value, max) {
   if (!max || max <= 0) return 0;
   return Math.log1p(value || 0) / Math.log1p(max);
 }
 
-function scoreWork(work, maxCitations, maxInfluential, maxEditions) {
+function scoreWork(work, maxCitations, maxInfluential, maxEditions, maxRatings) {
   const crossSourceBonus = Math.min((work.sources?.length || 1) - 1, 2) * 0.15;
   const recencyBonus = work.year && work.year >= 2010 ? 0.05 : 0;
+  // Textbook-specific queries (S2 textbook queries + Google Books) get a signal boost
+  const textbookBonus = work.isTextbook ? 0.08 : 0;
 
   const isBook = work.type === 'book' || (work.editionCount || 0) > 0;
 
   let score;
   if (isBook) {
-    const editionScore  = logNorm(work.editionCount || 0, maxEditions) * 0.45;
-    const citationScore = logNorm(work.citationCount || 0, maxCitations) * 0.30;
-    score = editionScore + citationScore + crossSourceBonus + recencyBonus;
+    const editionScore  = logNorm(work.editionCount || 0, maxEditions) * 0.40;
+    const citationScore = logNorm(work.citationCount || 0, maxCitations) * 0.25;
+    // ratingsCount from Google Books is a proxy for university library adoption
+    const ratingsScore  = logNorm(work.ratingsCount || 0, maxRatings) * 0.10;
+    score = editionScore + citationScore + ratingsScore + crossSourceBonus + recencyBonus + textbookBonus;
   } else {
     const influentialScore = logNorm(work.influentialCitationCount || 0, maxInfluential) * 0.45;
     const citationScore    = logNorm(work.citationCount || 0, maxCitations) * 0.35;
@@ -31,9 +35,10 @@ export function rankWorks(merged) {
   const maxCitations   = Math.max(...merged.map(w => w.citationCount || 0), 1);
   const maxInfluential = Math.max(...merged.map(w => w.influentialCitationCount || 0), 1);
   const maxEditions    = Math.max(...merged.map(w => w.editionCount || 0), 1);
+  const maxRatings     = Math.max(...merged.map(w => w.ratingsCount || 0), 1);
 
   return merged
-    .map(w => ({ ...w, score: scoreWork(w, maxCitations, maxInfluential, maxEditions) }))
+    .map(w => ({ ...w, score: scoreWork(w, maxCitations, maxInfluential, maxEditions, maxRatings) }))
     .sort((a, b) => b.score - a.score);
 }
 
@@ -44,8 +49,11 @@ export function formatForCompose(ranked) {
     const signals = [];
     if (w.citationCount > 0) signals.push(`${w.citationCount.toLocaleString()} citations`);
     if (w.influentialCitationCount > 0) signals.push(`${w.influentialCitationCount} highly influential citations`);
-    if (w.editionCount > 0) signals.push(`${w.editionCount} editions`);
+    if (w.editionCount > 0) signals.push(`${w.editionCount} editions (library holdings proxy)`);
+    if (w.ratingsCount > 0) signals.push(`${w.ratingsCount} reader ratings (textbook adoption proxy)`);
     if (w.fwci != null) signals.push(`FWCI ${w.fwci.toFixed(2)}`);
+    if (w.isTextbook) signals.push('identified as textbook');
+    if (w.isRecent) signals.push('recent work');
     const sourceStr = (w.sources || [w.source]).join(', ');
     return `${i + 1}. [${isBook ? 'BOOK' : 'PAPER'}] ${w.title}` +
       (w.authors ? ` — ${w.authors}` : '') +

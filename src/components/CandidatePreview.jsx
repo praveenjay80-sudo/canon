@@ -1,7 +1,11 @@
 const SOURCE_LABELS = {
-  'openalex': { label: 'OA', color: 'text-blue-600 bg-blue-50 border-blue-100' },
-  'semantic-scholar': { label: 'S2', color: 'text-violet-600 bg-violet-50 border-violet-100' },
-  'open-library': { label: 'OL', color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
+  'openalex-papers':           { label: 'OA',  color: 'text-blue-600 bg-blue-50 border-blue-100' },
+  'openalex-books':            { label: 'OA',  color: 'text-blue-600 bg-blue-50 border-blue-100' },
+  'openalex-recent':           { label: 'OA↑', color: 'text-sky-600 bg-sky-50 border-sky-100' },
+  'semantic-scholar':          { label: 'S2',  color: 'text-violet-600 bg-violet-50 border-violet-100' },
+  'semantic-scholar-textbooks':{ label: 'S2T', color: 'text-purple-600 bg-purple-50 border-purple-100' },
+  'google-books':              { label: 'GB',  color: 'text-rose-600 bg-rose-50 border-rose-100' },
+  'open-library':              { label: 'OL',  color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
 };
 
 function SourceBadge({ source }) {
@@ -31,10 +35,12 @@ export default function CandidatePreview({ candidates, harvestCounts }) {
           </span>
         </div>
         {harvestCounts && (
-          <div className="flex gap-3 mt-1">
-            <span className="text-xs text-blue-600">OpenAlex: {harvestCounts.openalex}</span>
-            <span className="text-xs text-violet-600">Semantic Scholar: {harvestCounts.semanticScholar}</span>
-            <span className="text-xs text-emerald-600">Open Library: {harvestCounts.openLibrary}</span>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+            {Object.entries(harvestCounts).map(([source, count]) => (
+              <span key={source} className="text-xs text-stone-400">
+                <span className="text-stone-500">{source}:</span> {count}
+              </span>
+            ))}
           </div>
         )}
       </div>
@@ -75,7 +81,7 @@ export default function CandidatePreview({ candidates, harvestCounts }) {
 
       <div className="px-5 py-2.5 border-t border-stone-100 bg-stone-50">
         <p className="text-xs text-stone-400">
-          Ranked by composite score: influential citations (papers) · edition count (books) · cross-source appearances · FWCI
+          Ranked by composite score: influential citations (papers) · edition count + reader ratings (books) · cross-source appearances · FWCI · textbook signal
         </p>
       </div>
     </div>

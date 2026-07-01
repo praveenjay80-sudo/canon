@@ -130,9 +130,10 @@ export function useCanonGenerator() {
       setPhase('composing');
       cycleMessages(DATA_COMPOSE_MESSAGES);
 
+      const totalRaw = Object.values(counts).reduce((a, b) => a + b, 0);
       const harvestSummary =
-        `Sources: OpenAlex (${counts.openalex} works) · Semantic Scholar (${counts.semanticScholar} works) · Open Library (${counts.openLibrary} works)\n` +
-        `Total unique works after deduplication: ${merged.length}\n` +
+        `Sources: ${Object.entries(counts).map(([k, v]) => `${k} (${v})`).join(' · ')}\n` +
+        `Total raw results: ${totalRaw} → ${merged.length} unique after deduplication\n` +
         `Showing top ${top.length} ranked by composite bibliometric score.\n\n`;
 
       const composeMessage =
