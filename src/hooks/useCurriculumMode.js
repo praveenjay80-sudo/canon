@@ -6,49 +6,48 @@ function resolveApiKey() {
   return import.meta.env.VITE_ANTHROPIC_API_KEY || localStorage.getItem('canon_api_key') || '';
 }
 
-const SYSTEM_PROMPT = `You are a senior university curriculum designer and intellectual historian. You have real data from two sources: the Open Syllabus Project (books most assigned in university courses worldwide) and Semantic Scholar (most influential research papers by academic impact). Your task: build the definitive, highly detailed university curriculum for the requested topic — the kind produced by the world's leading graduate program.
+const SYSTEM_PROMPT = `You are a senior university curriculum designer. You have data from the Open Syllabus Project (textbooks most assigned worldwide) and Semantic Scholar (most influential research papers). Build the definitive university curriculum for the requested topic.
 
-Output EXACTLY this format — no preamble, no commentary, no text outside this structure:
+CRITICAL: Output ONLY the structured text below. No markdown. No bold. No headers with #. No preamble. No explanation. Start your response with "TOPIC:" and nothing before it.
 
-TOPIC: [topic]
-OVERVIEW: [3–4 sentences: the intellectual structure of this field, major schools of thought or subfields, what mastery looks like, how the curriculum is organized]
+TOPIC: [topic name]
+OVERVIEW: [3-4 sentences on the intellectual structure of the field, major subfields, and what mastery looks like]
 LEVEL RANGE: [e.g., First-year undergraduate to active researcher]
-TRACKS: [comma-separated learning pathways if the field has meaningful branching, e.g. "Theoretical, Applied, Computational" — omit this line entirely if the field has no meaningful tracks]
+TRACKS: [comma-separated tracks if meaningful, e.g. Theoretical, Applied, Computational — omit line entirely if not applicable]
 
 ---
 
-COURSE 1: [University course title as a department would list it]
-LEVEL: [Undergraduate Year 1–2 / Undergraduate Year 3–4 / Graduate Year 1–2 / Advanced Graduate / Research Seminar]
-DURATION: [e.g., 1 semester / 2 semesters / 1 year]
-PREREQS: [List prior course numbers required, e.g. "Course 1, Course 2" — or "None" for first course]
-SKILLS: [3–5 specific, measurable competencies gained — not vague "understanding" but concrete abilities like "can implement X", "can prove Y", "can read Z independently"]
-MILESTONE: [One concrete sentence: name a specific paper, text, or capability that becomes accessible after this course]
-[One sentence: what students master and what it prepares them for]
+COURSE 1: [Course title]
+LEVEL: [Undergraduate Year 1-2 / Undergraduate Year 3-4 / Graduate Year 1-2 / Advanced Graduate / Research Seminar]
+DURATION: [e.g., 1 semester]
+PREREQS: [prior course numbers e.g. "Course 1, Course 2", or "None"]
+SKILLS: [3-5 specific competencies, comma-separated, e.g. "Can implement gradient descent, Can prove convergence theorems, Can read Bishop Ch.1-3"]
+MILESTONE: [One sentence naming a specific paper or capability unlocked after this course]
+[One sentence describing what this course covers and prepares students for]
 TEXTBOOKS:
-- [Title] by [Author] ([Year]) — [N] university courses — [core text / supplementary / reference]
-  → Typically covers: [specific chapters or topic clusters assigned at this course level]
+- [Title] by [Author] ([Year]) -- [N] university courses -- [core text / supplementary / reference]
+  -> Typically covers: [chapters or topics]
 PAPERS:
-- [Title] by [Author] ([Year]) — [one sentence: what this paper establishes and why it belongs at this course level]
+- [Title] by [Author] ([Year]) -- [why essential at this stage]
 
-COURSE 2: [Name]
+COURSE 2: [Title]
 LEVEL: ...
-...
+[repeat structure]
 
 ---
 
-TOTAL CURRICULUM: [N courses · estimated X–Y years from complete beginner to research frontier]
+TOTAL CURRICULUM: [N courses * X-Y years from beginner to research frontier]
 
 Rules:
-- Use ONLY works from the provided data — never invent or hallucinate titles not in the supplied lists
-- 5–9 courses total; order strictly introductory → research frontier, no level skipping
-- 3–6 TEXTBOOKS per course (from OSP data); 1–4 PAPERS per course (from Semantic Scholar data); omit a subsection entirely if no appropriate works exist for it
-- PREREQS must cite course numbers defined earlier (e.g. "Course 1, Course 2") — not generic descriptions
-- SKILLS must be specific and measurable — name techniques, theorems, or tools; avoid "understand" or "appreciate"
-- MILESTONE must name something concrete: a specific paper that becomes readable, a technique now achievable, or a problem now solvable
-- Honor syllabusCount as the primary signal for textbook course placement: 1000+ courses = Year 1–2; 100–999 = Year 3–4 / early graduate; 10–99 = graduate; <10 = advanced graduate/seminar
-- Honor influentialCitations for paper placement: assign papers to courses where students have sufficient background to read them
-- Never list the same work twice across courses
-- TOTAL CURRICULUM line is mandatory`;
+- Use ONLY titles from the supplied data lists
+- 5-9 courses, strictly introductory to advanced
+- 3-6 TEXTBOOKS per course; 1-4 PAPERS per course; omit PAPERS section entirely if none fit
+- PREREQS must reference course numbers (e.g. "Course 1") not descriptions
+- SKILLS must be specific and measurable abilities, not vague understanding
+- Honor syllabusCount: 1000+ = Year 1-2, 100-999 = Year 3-4/early grad, 10-99 = graduate, <10 = seminar
+- Never repeat a work across courses
+- TOTAL CURRICULUM line is mandatory
+- Do not use dashes (---) to separate courses, only use --- before COURSE 1 and at the end`;
 
 export function useCurriculumMode() {
   const [phase, setPhase] = useState('idle'); // idle | harvesting | generating | complete | error
@@ -110,13 +109,13 @@ export function useCurriculumMode() {
 
     const userMessage = `Build the complete university curriculum for: ${inputTopic}
 
-── TEXTBOOKS (Open Syllabus Project — ranked by worldwide university course assignments) ──
+=== TEXTBOOKS (Open Syllabus Project, ranked by worldwide university course assignments) ===
 ${ospData}
 
-── FOUNDATIONAL PAPERS (Semantic Scholar — ranked by influential citations) ──
+=== FOUNDATIONAL PAPERS (Semantic Scholar, ranked by influential citations) ===
 ${seminalData}
 
-Place textbooks in TEXTBOOKS sections and papers in PAPERS sections. Use only works listed above.`;
+Use only works from the lists above. Place OSP works in TEXTBOOKS sections and Semantic Scholar works in PAPERS sections.`;
 
     try {
       const response = await fetch('https://api.anthropic.com/v1/messages', {

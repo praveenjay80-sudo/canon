@@ -1,3 +1,8 @@
+// Strip markdown bold/italic and leading # from a line before matching
+function clean(line) {
+  return line.replace(/\*\*/g, '').replace(/\*/g, '').replace(/^#+\s*/, '').trim();
+}
+
 export function parseCurriculum(text) {
   if (!text) return null;
 
@@ -23,12 +28,15 @@ export function parseCurriculum(text) {
     textbooks: [], papers: [],
   });
 
+  // Normalize em-dash variants to a consistent separator for splitting
+  const normSep = s => s.replace(/ — /g, ' -- ').replace(/—/g, '--');
+
   while (i < lines.length) {
-    const line = lines[i];
-    const trimmed = line.trim();
+    const raw = lines[i];
+    const trimmed = clean(raw);
 
     // TOPIC
-    const topicMatch = trimmed.match(/^TOPIC:\s*(.+)$/);
+    const topicMatch = trimmed.match(/^TOPIC:\s*(.+)$/i);
     if (topicMatch) {
       result.topic = topicMatch[1].trim();
       collectingOverview = false;
@@ -36,7 +44,7 @@ export function parseCurriculum(text) {
     }
 
     // LEVEL RANGE
-    const levelRangeMatch = trimmed.match(/^LEVEL RANGE:\s*(.+)$/);
+    const levelRangeMatch = trimmed.match(/^LEVEL RANGE:\s*(.+)$/i);
     if (levelRangeMatch) {
       result.levelRange = levelRangeMatch[1].trim();
       collectingOverview = false;
@@ -52,9 +60,9 @@ export function parseCurriculum(text) {
     }
 
     // OVERVIEW
-    if (trimmed.match(/^OVERVIEW:\s*/)) {
+    if (trimmed.match(/^OVERVIEW:\s*/i)) {
       collectingOverview = true;
-      const inline = trimmed.replace(/^OVERVIEW:\s*/, '').trim();
+      const inline = trimmed.replace(/^OVERVIEW:\s*/i, '').trim();
       if (inline) overviewLines.push(inline);
       i++; continue;
     }
@@ -80,13 +88,13 @@ export function parseCurriculum(text) {
     }
 
     // --- separator
-    if (trimmed === '---') {
+    if (trimmed === '---' || trimmed === '***') {
       collectingOverview = false;
       i++; continue;
     }
 
-    // Collect overview lines
-    if (collectingOverview && trimmed && !trimmed.match(/^(COURSE|LEVEL RANGE|TOTAL|TRACKS)/i)) {
+    // Collect overview lines (stop at any known keyword)
+    if (collectingOverview && trimmed && !trimmed.match(/^(COURSE|LEVEL RANGE|TOTAL|TRACKS?|---)/i)) {
       overviewLines.push(trimmed);
       i++; continue;
     }
@@ -118,19 +126,19 @@ export function parseCurriculum(text) {
       // TEXTBOOKS: subsection marker
       if (trimmed.match(/^TEXTBOOKS?:/i)) { workSection = 'textbooks'; i++; continue; }
 
-      // PAPERS: subsection marker
+      // PAPERS: / SEMINAL PAPERS: subsection marker
       if (trimmed.match(/^(?:SEMINAL\s+)?PAPERS?:/i)) { workSection = 'papers'; i++; continue; }
 
-      // Work / paper item (- ...)
-      if (trimmed.match(/^-\s+/)) {
-        const workLine = trimmed.slice(2).trim();
+      // Work item (- ...) or (* ...)
+      if (trimmed.match(/^[-*]\s+/)) {
+        const workLine = normSep(trimmed.replace(/^[-*]\s+/, '').trim());
         if (workSection === 'papers') {
-          const dashIdx = workLine.indexOf(' — ');
+          const dashIdx = workLine.indexOf(' -- ');
           const ref = dashIdx !== -1 ? workLine.slice(0, dashIdx).trim() : workLine;
-          const rationale = dashIdx !== -1 ? workLine.slice(dashIdx + 3).trim() : '';
+          const rationale = dashIdx !== -1 ? workLine.slice(dashIdx + 4).trim() : '';
           currentCourse.papers.push({ ref, rationale });
         } else {
-          const parts = workLine.split(' — ');
+          const parts = workLine.split(' -- ');
           const ref = parts[0]?.trim() || workLine;
           const second = parts[1]?.trim() || '';
           const third = parts[2]?.trim() || '';
@@ -143,18 +151,21 @@ export function parseCurriculum(text) {
         i++; continue;
       }
 
-      // Focus line → (textbooks only)
-      if ((trimmed.match(/^→/) || line.match(/^\s+→/)) && workSection === 'textbooks') {
-        const focus = trimmed.replace(/^→\s*(?:Typically covers:|Focus:)?\s*/i, '').trim();
-        if (currentCourse.textbooks.length > 0) {
+      // Focus line -> or → (textbooks only)
+      if (trimmed.match(/^[-=]>|^→/) || raw.match(/^\s+[-=]>|^\s+→/)) {
+        if (workSection === 'textbooks' && currentCourse.textbooks.length > 0) {
+          const focus = trimmed
+            .replace(/^[-=]>\s*|^→\s*/i, '')
+            .replace(/^(?:Typically covers:|Focus:)\s*/i, '')
+            .trim();
           currentCourse.textbooks[currentCourse.textbooks.length - 1].focus = focus;
         }
         i++; continue;
       }
 
-      // Description — first non-empty, non-metadata line before TEXTBOOKS
+      // Description — first substantive line in a course before TEXTBOOKS:
       if (trimmed && !currentCourse.description && workSection === 'textbooks'
-          && !trimmed.match(/^(COURSE|LEVEL|DURATION|PREREQ|SKILL|MILESTONE|TEXTBOOK|PAPER|TOTAL)/i)) {
+          && !trimmed.match(/^(COURSE|LEVEL|DURATION|PREREQ|SKILL|MILESTONE|TEXTBOOK|PAPER|TOTAL|---)/i)) {
         currentCourse.description = trimmed;
       }
     }

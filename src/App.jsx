@@ -484,6 +484,15 @@ export default function App() {
               />
             )}
 
+            {appMode === 'curriculum' && curriculum.phase === 'complete' && curriculum.parsed
+              && !curriculum.parsed.topic && curriculum.parsed.courses.length === 0
+              && curriculum.content && (
+              <div className="mt-8">
+                <p className="text-xs font-mono uppercase tracking-widest text-stone-400 mb-3">Raw Output (parse failed — check format)</p>
+                <pre className="text-xs text-stone-600 whitespace-pre-wrap leading-relaxed border border-stone-200 p-4 bg-stone-50 max-h-96 overflow-y-auto">{curriculum.content}</pre>
+              </div>
+            )}
+
             {appMode === 'curriculum' && curriculum.phase === 'complete' && (
               <div className="mt-8 pt-6 border-t border-stone-200 flex gap-2">
                 <button
