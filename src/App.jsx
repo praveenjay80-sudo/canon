@@ -12,9 +12,12 @@ import { useEnrichment } from './hooks/useEnrichment';
 import { useWorkExplainer } from './hooks/useWorkExplainer';
 import { useFieldNavigation } from './hooks/useFieldNavigation';
 import { useReadingOrder } from './hooks/useReadingOrder';
+import { useReverseMode } from './hooks/useReverseMode';
 import { parseCanon } from './utils/parseCanon';
 import { copyMarkdown } from './utils/exportMarkdown';
 import ReadingOrderView from './components/ReadingOrderView';
+import ReverseInput from './components/ReverseInput';
+import PrerequisiteView from './components/PrerequisiteView';
 
 function WorkRow({ w }) {
   return (
@@ -122,10 +125,12 @@ export default function App() {
   const explainer = useWorkExplainer(gen.topic);
   const fieldNav = useFieldNavigation();
   const readingOrder = useReadingOrder();
+  const reverse = useReverseMode();
   const [inputTopic, setInputTopic] = useState('');
   const [shake, setShake] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [view, setView] = useState('canon');
+  const [appMode, setAppMode] = useState('canon'); // 'canon' | 'reverse'
 
   const parsed = useMemo(() => parseCanon(gen.content), [gen.content]);
 
@@ -223,32 +228,59 @@ export default function App() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex gap-12">
           <div className="flex-1 min-w-0 py-12">
-            <header className="mb-12">
+            <header className="mb-10">
               <h1 className="text-3xl font-semibold tracking-tight text-stone-900">Canon</h1>
-              <p className="mt-1 text-stone-400 text-sm">Definitive reading lists for any academic field</p>
-              <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1">
-                <span className="text-xs text-stone-400">
-                  <span className="text-stone-500 font-medium">Browse</span> — click any field in the sidebar to explore its subfields
-                </span>
-                <span className="text-xs text-stone-400">
-                  <span className="text-stone-500 font-medium">Generate</span> — click a subfield to produce its reading canon
-                </span>
-                <span className="text-xs text-stone-400">
-                  <span className="text-stone-500 font-medium">Refine</span> — submit a note below any canon to adjust its focus
-                </span>
+              <p className="mt-1 text-stone-400 text-sm">
+                {appMode === 'canon'
+                  ? 'Definitive reading lists for any academic field'
+                  : 'Paste any paper or book — get everything you need to read it'}
+              </p>
+
+              {/* App mode toggle */}
+              <div className="mt-6 flex border-b border-stone-200">
+                <button
+                  onClick={() => setAppMode('canon')}
+                  className={`px-4 py-2.5 text-xs font-mono uppercase tracking-widest -mb-px transition-colors ${
+                    appMode === 'canon'
+                      ? 'border-b-2 border-stone-900 text-stone-900'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                  }`}
+                >
+                  Generate Canon
+                </button>
+                <button
+                  onClick={() => setAppMode('reverse')}
+                  className={`px-4 py-2.5 text-xs font-mono uppercase tracking-widest -mb-px transition-colors ${
+                    appMode === 'reverse'
+                      ? 'border-b-2 border-stone-900 text-stone-900'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                  }`}
+                >
+                  Prerequisites
+                </button>
               </div>
             </header>
 
             <ApiKeyInput />
 
-            <CanonInput
-              value={inputTopic}
-              onChange={setInputTopic}
-              onGenerate={handleGenerate}
-              onQuickGenerate={handleGenerate}
-              shake={shake}
-              disabled={isGenerating || isRefining}
-            />
+            {appMode === 'canon' && (
+              <CanonInput
+                value={inputTopic}
+                onChange={setInputTopic}
+                onGenerate={handleGenerate}
+                onQuickGenerate={handleGenerate}
+                shake={shake}
+                disabled={isGenerating || isRefining}
+              />
+            )}
+
+            {appMode === 'reverse' && (
+              <ReverseInput
+                onGenerate={reverse.generate}
+                disabled={reverse.phase === 'working'}
+                shake={shake}
+              />
+            )}
 
 
             {/* Harvest + scoring phases */}
@@ -333,6 +365,51 @@ export default function App() {
                     isStreaming={readingOrder.status === 'loading'}
                   />
                 )}
+              </div>
+            )}
+
+            {/* Reverse mode output */}
+            {appMode === 'reverse' && reverse.phase === 'working' && (
+              <div className="mt-8 border border-stone-200 bg-white px-6 py-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex gap-0.5">
+                    <span className="loading-dot" />
+                    <span className="loading-dot" />
+                    <span className="loading-dot" />
+                  </span>
+                  <span className="text-sm text-stone-500">Mapping prerequisite path from scratch...</span>
+                </div>
+              </div>
+            )}
+
+            {appMode === 'reverse' && reverse.phase === 'error' && (
+              <div className="mt-8 p-5 bg-red-50 border border-red-200">
+                <p className="font-medium text-red-900 text-sm">Failed</p>
+                <p className="text-sm text-red-700 mt-1">{reverse.error}</p>
+              </div>
+            )}
+
+            {appMode === 'reverse' && (reverse.phase === 'working' || reverse.phase === 'complete') && reverse.parsed && (
+              <PrerequisiteView
+                parsed={reverse.parsed}
+                isStreaming={reverse.phase === 'working'}
+              />
+            )}
+
+            {appMode === 'reverse' && reverse.phase === 'complete' && (
+              <div className="mt-8 pt-6 border-t border-stone-200 flex gap-2">
+                <button
+                  onClick={() => navigator.clipboard.writeText(reverse.content)}
+                  className="px-4 py-2 text-sm border border-stone-300 text-stone-700 hover:bg-stone-50 transition-colors"
+                >
+                  Copy Text
+                </button>
+                <button
+                  onClick={reverse.reset}
+                  className="px-4 py-2 text-sm bg-stone-900 text-white hover:bg-stone-700 transition-colors"
+                >
+                  New Search
+                </button>
               </div>
             )}
 
