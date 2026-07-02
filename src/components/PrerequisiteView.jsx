@@ -60,14 +60,20 @@ export default function PrerequisiteView({ parsed, isStreaming }) {
               {phase.focus && (
                 <p className="text-xs text-stone-500 mt-1 mb-4 leading-relaxed">{phase.focus}</p>
               )}
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {phase.works.map((work, j) => (
                   <div key={j} className="flex gap-3">
                     <span className={`text-xs font-mono mt-0.5 shrink-0 w-4 ${c.num}`}>{j + 1}.</span>
-                    <div>
+                    <div className="flex-1">
                       <div className="text-sm font-medium text-stone-800">{work.ref}</div>
                       {work.rationale && (
                         <div className="text-xs text-stone-500 mt-0.5 leading-relaxed">{work.rationale}</div>
+                      )}
+                      {work.focus && (
+                        <div className="mt-1.5 flex gap-1.5 items-start">
+                          <span className="text-xs font-mono text-stone-400 shrink-0 mt-px">→</span>
+                          <span className="text-xs text-stone-600 leading-relaxed">{work.focus}</span>
+                        </div>
                       )}
                     </div>
                   </div>

@@ -24,11 +24,13 @@ CONTEXT: [2–3 sentences: what problem this work solves, what it achieves, and 
 
 PHASE 0: [Name] (Weeks [range])
 [One sentence: what these works give the reader that makes everything else possible]
-- [Title] by [Author] ([Year]) — [why this is needed before phase 1; what specific tool or concept it provides]
+- [Title] by [Author] ([Year]) — [why this is needed; what specific concept or tool it provides]
+  → Focus: [exact chapters, sections, or pages to read]. [What to skip and why.]
 
 PHASE 1: [Name] (Weeks [range])
 [One sentence: what capability this phase builds]
 - [Title] by [Author] ([Year]) — [what it unlocks for the next phase]
+  → Focus: [exact chapters, sections, or pages]. [What to skip.]
 
 PHASE 2: [Name] (Weeks [range])
 ...
@@ -48,6 +50,8 @@ Rules for a precise, gap-free path:
 - Phases progress strictly: no phase should assume knowledge from a later phase
 - Within each phase, works are ordered so each one prepares for the next
 - The rationale for each work must name the specific concept, technique, or vocabulary it provides that the target work uses — not just "useful background"
+- FOCUS LINES ARE MANDATORY for every work: name exact chapter numbers and titles, or page ranges, or named sections. State what to skip and why. Be precise — "Ch. 3–5" is not enough; write "Ch. 3 (Metric Spaces), Ch. 4 (Continuous Functions), Ch. 5 (Differentiation) — skip Ch. 6 (integration, not needed here)". For papers, name the specific sections.
+- For textbooks: distinguish which chapters are essential prerequisites vs which are background reading vs which can be skipped entirely
 - The final phase (Direct Prerequisites) must include the papers or books the target work directly and explicitly builds on
 - If the target work is itself introductory (undergraduate level), compress to 2–3 phases only
 - Never list the target work itself`;

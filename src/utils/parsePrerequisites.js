@@ -53,7 +53,11 @@ export function parsePrerequisites(text) {
       currentPhase.works.push({
         ref: dashIdx >= 0 ? workLine.slice(0, dashIdx) : workLine,
         rationale: dashIdx >= 0 ? workLine.slice(dashIdx + 3) : '',
+        focus: '',
       });
+    } else if (line.match(/^\s*→\s*/) && currentPhase.works.length > 0) {
+      const focusText = line.replace(/^\s*→\s*(Focus:\s*)?/, '').trim();
+      currentPhase.works[currentPhase.works.length - 1].focus = focusText;
     } else if (line.trim() && !currentPhase.focus) {
       currentPhase.focus = line.trim();
     }
