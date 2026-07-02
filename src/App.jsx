@@ -16,6 +16,8 @@ import { useReverseMode } from './hooks/useReverseMode';
 import { useCurriculumMode } from './hooks/useCurriculumMode';
 import { useDissertationMode } from './hooks/useDissertationMode';
 import { useCanonDrift } from './hooks/useCanonDrift';
+import { useConsilience } from './hooks/useConsilience';
+import { useInquiry } from './hooks/useInquiry';
 import { parseCanon } from './utils/parseCanon';
 import { copyMarkdown } from './utils/exportMarkdown';
 import ReadingOrderView from './components/ReadingOrderView';
@@ -27,6 +29,10 @@ import DissertationInput from './components/DissertationInput';
 import DissertationView from './components/DissertationView';
 import CanonDriftInput from './components/CanonDriftInput';
 import CanonDriftView from './components/CanonDriftView';
+import ConsilienceInput from './components/ConsilienceInput';
+import ConsilienceView from './components/ConsilienceView';
+import InquiryInput from './components/InquiryInput';
+import InquiryView from './components/InquiryView';
 
 function WorkRow({ w }) {
   return (
@@ -138,11 +144,13 @@ export default function App() {
   const curriculum = useCurriculumMode();
   const dissertation = useDissertationMode();
   const drift = useCanonDrift();
+  const consilience = useConsilience();
+  const inquiry = useInquiry();
   const [inputTopic, setInputTopic] = useState('');
   const [shake, setShake] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [view, setView] = useState('canon');
-  const [appMode, setAppMode] = useState('canon'); // 'canon' | 'reverse' | 'curriculum' | 'dissertation' | 'drift'
+  const [appMode, setAppMode] = useState('canon'); // 'canon' | 'reverse' | 'curriculum' | 'dissertation' | 'drift' | 'consilience' | 'inquiry'
 
   const parsed = useMemo(() => parseCanon(gen.content), [gen.content]);
 
@@ -250,7 +258,15 @@ export default function App() {
                   ? 'Definitive reading lists for any academic field'
                   : appMode === 'reverse'
                   ? 'Find pre and post requisites for any book and paper'
-                  : 'How universities teach any subject — grounded in real syllabus data'}
+                  : appMode === 'curriculum'
+                  ? 'How universities teach any subject — grounded in real syllabus data'
+                  : appMode === 'dissertation'
+                  ? 'Qualifying exam reading lists for PhD research questions'
+                  : appMode === 'drift'
+                  ? 'How a field\'s canon has shifted across eras — what rose and what faded'
+                  : appMode === 'consilience'
+                  ? 'What every discipline says — and where they all converge'
+                  : 'The open questions that define a frontier and why they resist answers'}
               </p>
 
               {/* App mode toggle */}
@@ -305,6 +321,26 @@ export default function App() {
                 >
                   Canon Drift
                 </button>
+                <button
+                  onClick={() => setAppMode('consilience')}
+                  className={`px-4 py-2.5 text-xs font-mono uppercase tracking-widest -mb-px transition-colors ${
+                    appMode === 'consilience'
+                      ? 'border-b-2 border-stone-900 text-stone-900'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                  }`}
+                >
+                  Consilience
+                </button>
+                <button
+                  onClick={() => setAppMode('inquiry')}
+                  className={`px-4 py-2.5 text-xs font-mono uppercase tracking-widest -mb-px transition-colors ${
+                    appMode === 'inquiry'
+                      ? 'border-b-2 border-stone-900 text-stone-900'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                  }`}
+                >
+                  The Inquiry
+                </button>
               </div>
             </header>
 
@@ -350,6 +386,19 @@ export default function App() {
               />
             )}
 
+            {appMode === 'consilience' && (
+              <ConsilienceInput
+                onGenerate={consilience.generate}
+                disabled={consilience.phase === 'harvesting' || consilience.phase === 'generating'}
+              />
+            )}
+
+            {appMode === 'inquiry' && (
+              <InquiryInput
+                onGenerate={inquiry.generate}
+                disabled={inquiry.phase === 'harvesting' || inquiry.phase === 'generating'}
+              />
+            )}
 
             {/* Harvest + scoring phases */}
             {(gen.phase === 'harvesting' || gen.phase === 'scoring') && (
@@ -642,6 +691,100 @@ export default function App() {
                   className="px-4 py-2 text-sm bg-stone-900 text-white hover:bg-stone-700 transition-colors"
                 >
                   New Drift
+                </button>
+              </div>
+            )}
+
+            {/* Consilience mode */}
+            {appMode === 'consilience' && consilience.phase === 'harvesting' && (
+              <div className="mt-8 border border-stone-200 bg-white px-6 py-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex gap-0.5">
+                    <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                  </span>
+                  <span className="text-sm text-stone-500">Gathering literature across disciplines...</span>
+                </div>
+              </div>
+            )}
+            {appMode === 'consilience' && consilience.phase === 'generating' && (
+              <div className="mt-8 border border-stone-200 bg-white px-6 py-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex gap-0.5">
+                    <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                  </span>
+                  <span className="text-sm text-stone-500">Synthesizing {consilience.dataCount} works across disciplines...</span>
+                </div>
+              </div>
+            )}
+            {appMode === 'consilience' && consilience.phase === 'error' && (
+              <div className="mt-8 p-5 bg-red-50 border border-red-200">
+                <p className="font-medium text-red-900 text-sm">Failed</p>
+                <p className="text-sm text-red-700 mt-1">{consilience.error}</p>
+              </div>
+            )}
+            {appMode === 'consilience' && (consilience.phase === 'generating' || consilience.phase === 'complete') && consilience.parsed && (
+              <ConsilienceView parsed={consilience.parsed} isStreaming={consilience.phase === 'generating'} />
+            )}
+            {appMode === 'consilience' && consilience.phase === 'complete' && (
+              <div className="mt-8 pt-6 border-t border-stone-200 flex gap-2">
+                <button
+                  onClick={() => navigator.clipboard.writeText(consilience.content)}
+                  className="px-4 py-2 text-sm border border-stone-300 text-stone-700 hover:bg-stone-50 transition-colors"
+                >
+                  Copy Text
+                </button>
+                <button
+                  onClick={consilience.reset}
+                  className="px-4 py-2 text-sm bg-stone-900 text-white hover:bg-stone-700 transition-colors"
+                >
+                  New Question
+                </button>
+              </div>
+            )}
+
+            {/* Inquiry mode */}
+            {appMode === 'inquiry' && inquiry.phase === 'harvesting' && (
+              <div className="mt-8 border border-stone-200 bg-white px-6 py-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex gap-0.5">
+                    <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                  </span>
+                  <span className="text-sm text-stone-500">Gathering frontier research papers...</span>
+                </div>
+              </div>
+            )}
+            {appMode === 'inquiry' && inquiry.phase === 'generating' && (
+              <div className="mt-8 border border-stone-200 bg-white px-6 py-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex gap-0.5">
+                    <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                  </span>
+                  <span className="text-sm text-stone-500">Mapping open questions from {inquiry.paperCount} papers...</span>
+                </div>
+              </div>
+            )}
+            {appMode === 'inquiry' && inquiry.phase === 'error' && (
+              <div className="mt-8 p-5 bg-red-50 border border-red-200">
+                <p className="font-medium text-red-900 text-sm">Failed</p>
+                <p className="text-sm text-red-700 mt-1">{inquiry.error}</p>
+              </div>
+            )}
+            {appMode === 'inquiry' && (inquiry.phase === 'generating' || inquiry.phase === 'complete') && inquiry.parsed && (
+              <InquiryView parsed={inquiry.parsed} isStreaming={inquiry.phase === 'generating'} />
+            )}
+            {appMode === 'inquiry' && inquiry.phase === 'complete' && (
+              <div className="mt-8 pt-6 border-t border-stone-200 flex gap-2">
+                <button
+                  onClick={() => navigator.clipboard.writeText(inquiry.content)}
+                  className="px-4 py-2 text-sm border border-stone-300 text-stone-700 hover:bg-stone-50 transition-colors"
+                >
+                  Copy Text
+                </button>
+                <button
+                  onClick={inquiry.reset}
+                  className="px-4 py-2 text-sm bg-stone-900 text-white hover:bg-stone-700 transition-colors"
+                >
+                  New Inquiry
                 </button>
               </div>
             )}
