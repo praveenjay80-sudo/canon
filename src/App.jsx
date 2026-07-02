@@ -13,11 +13,14 @@ import { useWorkExplainer } from './hooks/useWorkExplainer';
 import { useFieldNavigation } from './hooks/useFieldNavigation';
 import { useReadingOrder } from './hooks/useReadingOrder';
 import { useReverseMode } from './hooks/useReverseMode';
+import { useCurriculumMode } from './hooks/useCurriculumMode';
 import { parseCanon } from './utils/parseCanon';
 import { copyMarkdown } from './utils/exportMarkdown';
 import ReadingOrderView from './components/ReadingOrderView';
 import ReverseInput from './components/ReverseInput';
 import PrerequisiteView from './components/PrerequisiteView';
+import CurriculumInput from './components/CurriculumInput';
+import CurriculumView from './components/CurriculumView';
 
 function WorkRow({ w }) {
   return (
@@ -126,11 +129,12 @@ export default function App() {
   const fieldNav = useFieldNavigation();
   const readingOrder = useReadingOrder();
   const reverse = useReverseMode();
+  const curriculum = useCurriculumMode();
   const [inputTopic, setInputTopic] = useState('');
   const [shake, setShake] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [view, setView] = useState('canon');
-  const [appMode, setAppMode] = useState('canon'); // 'canon' | 'reverse'
+  const [appMode, setAppMode] = useState('canon'); // 'canon' | 'reverse' | 'curriculum'
 
   const parsed = useMemo(() => parseCanon(gen.content), [gen.content]);
 
@@ -236,7 +240,9 @@ export default function App() {
               <p className="mt-2 text-stone-500 text-base">
                 {appMode === 'canon'
                   ? 'Definitive reading lists for any academic field'
-                  : 'Find pre and post requisites for any book and paper'}
+                  : appMode === 'reverse'
+                  ? 'Find pre and post requisites for any book and paper'
+                  : 'How universities teach any subject — grounded in real syllabus data'}
               </p>
 
               {/* App mode toggle */}
@@ -261,6 +267,16 @@ export default function App() {
                 >
                   Pre &amp; Post Requisites
                 </button>
+                <button
+                  onClick={() => setAppMode('curriculum')}
+                  className={`px-4 py-2.5 text-xs font-mono uppercase tracking-widest -mb-px transition-colors ${
+                    appMode === 'curriculum'
+                      ? 'border-b-2 border-stone-900 text-stone-900'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                  }`}
+                >
+                  Curriculum
+                </button>
               </div>
             </header>
 
@@ -282,6 +298,13 @@ export default function App() {
                 onGenerate={reverse.generate}
                 disabled={reverse.phase === 'working'}
                 shake={shake}
+              />
+            )}
+
+            {appMode === 'curriculum' && (
+              <CurriculumInput
+                onGenerate={curriculum.generate}
+                disabled={curriculum.phase === 'harvesting' || curriculum.phase === 'generating'}
               />
             )}
 
@@ -412,6 +435,68 @@ export default function App() {
                   className="px-4 py-2 text-sm bg-stone-900 text-white hover:bg-stone-700 transition-colors"
                 >
                   New Search
+                </button>
+              </div>
+            )}
+
+            {/* Curriculum mode */}
+            {appMode === 'curriculum' && curriculum.phase === 'harvesting' && (
+              <div className="mt-8 border border-stone-200 bg-white px-6 py-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex gap-0.5">
+                    <span className="loading-dot" />
+                    <span className="loading-dot" />
+                    <span className="loading-dot" />
+                  </span>
+                  <span className="text-sm text-stone-500">Querying Open Syllabus + Semantic Scholar — gathering textbooks and seminal papers...</span>
+                </div>
+              </div>
+            )}
+
+            {appMode === 'curriculum' && curriculum.phase === 'generating' && (
+              <div className="mt-8 border border-stone-200 bg-white px-6 py-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex gap-0.5">
+                    <span className="loading-dot" />
+                    <span className="loading-dot" />
+                    <span className="loading-dot" />
+                  </span>
+                  <span className="text-sm text-stone-500">
+                    Building curriculum from {curriculum.ospWorks.length} syllabus works + {curriculum.seminalWorks.length} seminal papers...
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {appMode === 'curriculum' && curriculum.phase === 'error' && (
+              <div className="mt-8 p-5 bg-red-50 border border-red-200">
+                <p className="font-medium text-red-900 text-sm">Failed</p>
+                <p className="text-sm text-red-700 mt-1">{curriculum.error}</p>
+              </div>
+            )}
+
+            {appMode === 'curriculum' && (curriculum.phase === 'generating' || curriculum.phase === 'complete') && curriculum.parsed && (
+              <CurriculumView
+                parsed={curriculum.parsed}
+                isStreaming={curriculum.phase === 'generating'}
+                ospCount={curriculum.ospWorks.length}
+                seminalCount={curriculum.seminalWorks.length}
+              />
+            )}
+
+            {appMode === 'curriculum' && curriculum.phase === 'complete' && (
+              <div className="mt-8 pt-6 border-t border-stone-200 flex gap-2">
+                <button
+                  onClick={() => navigator.clipboard.writeText(curriculum.content)}
+                  className="px-4 py-2 text-sm border border-stone-300 text-stone-700 hover:bg-stone-50 transition-colors"
+                >
+                  Copy Text
+                </button>
+                <button
+                  onClick={curriculum.reset}
+                  className="px-4 py-2 text-sm bg-stone-900 text-white hover:bg-stone-700 transition-colors"
+                >
+                  New Curriculum
                 </button>
               </div>
             )}
