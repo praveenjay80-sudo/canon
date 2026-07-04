@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useMemo } from 'react';
+import RAW from '../data/tesamat.json';
 
 const MODES = [
   { key: 'canon',        label: 'Canon' },
@@ -10,189 +11,113 @@ const MODES = [
   { key: 'reverse',      label: 'Prerequisites' },
 ];
 
-// Top-level LCSH subject headings with known sh IDs
-const DOMAINS = [
-  { label: 'Philosophy',            id: 'sh85100849' },
-  { label: 'Mathematics',           id: 'sh85082139' },
-  { label: 'Physics',               id: 'sh85101653' },
-  { label: 'Chemistry',             id: 'sh85022986' },
-  { label: 'Biology',               id: 'sh85014238' },
-  { label: 'Computer Science',      id: 'sh89003287' },
-  { label: 'Linguistics',           id: 'sh85077222' },
-  { label: 'Economics',             id: 'sh85040939' },
-  { label: 'Law',                   id: 'sh85075116' },
-  { label: 'History',               id: 'sh85061232' },
-  { label: 'Geography',             id: 'sh85053986' },
-  { label: 'Psychology',            id: 'sh85108459' },
-  { label: 'Sociology',             id: 'sh85123889' },
-  { label: 'Medicine',              id: 'sh85083063' },
-  { label: 'Music',                 id: 'sh85088762' },
-  { label: 'Literature',            id: 'sh85077507' },
-  { label: 'Religion',              id: 'sh85112549' },
-  { label: 'Political Science',     id: 'sh85104440' },
-  { label: 'Engineering',           id: 'sh85043235' },
-  { label: 'Architecture',          id: 'sh85006507' },
-  { label: 'Education',             id: 'sh85040989' },
-  { label: 'Anthropology',          id: 'sh85005516' },
-  { label: 'Astronomy',             id: 'sh85009003' },
-  { label: 'Environmental Sciences',id: 'sh85044203' },
-  { label: 'Social Sciences',       id: 'sh85123900' },
-];
+// ── Row ───────────────────────────────────────────────────────────────────────
 
-const ROOT_IDS = DOMAINS.map(d => 'lcsh-' + d.id);
-
-// ── API ───────────────────────────────────────────────────────────────────────
-
-async function fetchChildren(lcshId) {
-  const res = await fetch(`/api/lcsh/${lcshId}`);
-  if (!res.ok) throw new Error(`LCSH HTTP ${res.status}`);
-  const json = await res.json();
-  if (json.error) throw new Error(json.error);
-  return json.narrower || [];
-}
-
-// ── Initial state ─────────────────────────────────────────────────────────────
-
-function buildInitialNodes() {
-  const nodes = {};
-  for (const d of DOMAINS) {
-    const id = 'lcsh-' + d.id;
-    nodes[id] = {
-      id, lcshId: d.id, label: d.label,
-      expanded: false, loading: false, error: null, childIds: null,
-    };
-  }
-  return nodes;
-}
-
-// ── TreeNode ──────────────────────────────────────────────────────────────────
-
-function TreeNode({ nodeId, nodes, depth, onToggle, onGenerate, mode }) {
-  const node = nodes[nodeId];
-  if (!node) return null;
-
-  const isLeaf = Array.isArray(node.childIds) && node.childIds.length === 0;
-  const pl     = 8 + depth * 20;
+function Row({ node, depth, open, onToggle, onGenerate, mode }) {
+  const hasChildren = node.children?.length > 0;
+  const pl = 8 + depth * 18;
+  const modeLabel = MODES.find(m => m.key === mode)?.label || 'Canon';
 
   return (
-    <div>
-      <div
-        className="flex items-start gap-2 py-1.5 border-b border-stone-50 last:border-0 hover:bg-stone-50 group transition-colors"
-        style={{ paddingLeft: pl, paddingRight: 8 }}
+    <div
+      className="flex items-start gap-2 py-1 border-b border-stone-50 last:border-0 hover:bg-stone-50 group transition-colors"
+      style={{ paddingLeft: pl, paddingRight: 8 }}
+    >
+      <button
+        onClick={() => hasChildren && onToggle(node.es)}
+        disabled={!hasChildren}
+        className="shrink-0 w-5 h-5 flex items-center justify-center mt-0.5 disabled:cursor-default"
       >
-        <button
-          onClick={() => onToggle(nodeId)}
-          disabled={node.loading || isLeaf}
-          className="shrink-0 w-5 h-5 flex items-center justify-center mt-0.5 disabled:cursor-default"
-        >
-          {node.loading
-            ? <span className="text-[10px] text-blue-400 animate-pulse font-mono">⋯</span>
-            : isLeaf
-            ? <span className="text-[9px] text-stone-200">·</span>
-            : node.expanded
+        {hasChildren
+          ? open
             ? <span className="text-[9px] text-blue-500">▼</span>
-            : <span className="text-[9px] text-stone-400 group-hover:text-blue-500">▶</span>}
-        </button>
+            : <span className="text-[9px] text-stone-400 group-hover:text-blue-500">▶</span>
+          : <span className="text-[9px] text-stone-200">·</span>}
+      </button>
 
-        <div className="flex-1 min-w-0">
-          <span className={`${depth === 0 ? 'font-semibold text-stone-900' : 'font-medium text-stone-800'} text-sm leading-snug`}>
-            {node.label}
-          </span>
-          {node.error && (
-            <span className="ml-2 text-[9px] font-mono text-red-400">{node.error}</span>
-          )}
-        </div>
-
-        <div className="shrink-0 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          {node.lcshId && (
-            <a
-              href={`https://id.loc.gov/authorities/subjects/${node.lcshId}.html`}
-              target="_blank" rel="noopener noreferrer"
-              className="text-[8px] font-mono text-blue-400 hover:underline"
-            >LC↗</a>
-          )}
-          <button
-            onClick={() => onGenerate(node.label, mode)}
-            className="text-[8px] font-mono px-2 py-0.5 bg-stone-900 text-white hover:bg-stone-700 transition-colors"
-          >
-            → {MODES.find(m => m.key === mode)?.label || 'Canon'}
-          </button>
-        </div>
+      <div className="flex-1 min-w-0">
+        <span className={`${depth === 0 ? 'font-semibold text-stone-900 text-sm' : depth === 1 ? 'font-medium text-stone-800 text-sm' : 'text-stone-700 text-xs'} leading-snug`}>
+          {node.en}
+        </span>
+        {node.es !== node.en && (
+          <span className="ml-1.5 text-[9px] font-mono text-stone-400">{node.es}</span>
+        )}
       </div>
 
-      {node.expanded && node.childIds?.length > 0 && (
-        <div>
-          {node.childIds.map(cid => (
-            <TreeNode key={cid} nodeId={cid} nodes={nodes} depth={depth + 1}
-              onToggle={onToggle} onGenerate={onGenerate} mode={mode} />
-          ))}
-        </div>
-      )}
+      <div className="shrink-0 flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={() => onGenerate(node.en, mode)}
+          className="text-[8px] font-mono px-2 py-0.5 bg-stone-900 text-white hover:bg-stone-700 transition-colors"
+        >
+          → {modeLabel}
+        </button>
+      </div>
     </div>
   );
 }
 
-// ── Main view ─────────────────────────────────────────────────────────────────
+function SubTree({ nodes, depth, openSet, onToggle, onGenerate, mode }) {
+  return nodes.map(node => (
+    <div key={node.es}>
+      <Row node={node} depth={depth} open={openSet.has(node.es)}
+        onToggle={onToggle} onGenerate={onGenerate} mode={mode} />
+      {openSet.has(node.es) && node.children?.length > 0 && (
+        <SubTree nodes={node.children} depth={depth + 1}
+          openSet={openSet} onToggle={onToggle} onGenerate={onGenerate} mode={mode} />
+      )}
+    </div>
+  ));
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function KeywordsView({ onGenerate }) {
-  const [mode,  setMode]  = useState('canon');
-  const [nodes, setNodes] = useState(buildInitialNodes);
+  const [mode,    setMode]    = useState('canon');
+  const [openSet, setOpenSet] = useState(new Set());
+  const [search,  setSearch]  = useState('');
 
-  const toggleNode = useCallback(async (nodeId) => {
-    const node = nodes[nodeId];
-    if (!node || node.loading) return;
+  const onToggle = (key) => setOpenSet(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
 
-    if (node.expanded) {
-      setNodes(prev => ({ ...prev, [nodeId]: { ...prev[nodeId], expanded: false } }));
-      return;
-    }
-    if (node.childIds !== null) {
-      setNodes(prev => ({ ...prev, [nodeId]: { ...prev[nodeId], expanded: true } }));
-      return;
-    }
-
-    setNodes(prev => ({ ...prev, [nodeId]: { ...prev[nodeId], loading: true, error: null } }));
-
-    try {
-      const children = await fetchChildren(node.lcshId);
-
-      const newNodes = {};
-      const childIds = [];
-      for (const c of children) {
-        const cid = 'lcsh-' + c.id;
-        newNodes[cid] = {
-          id: cid, lcshId: c.id, label: c.label,
-          expanded: false, loading: false, error: null, childIds: null,
-        };
-        childIds.push(cid);
+  // Flatten all nodes for search
+  const allNodes = useMemo(() => {
+    const flat = [];
+    function walk(nodes, breadcrumb) {
+      for (const n of nodes) {
+        flat.push({ ...n, breadcrumb });
+        if (n.children?.length) walk(n.children, [...breadcrumb, n.en]);
       }
-
-      setNodes(prev => ({
-        ...prev,
-        ...newNodes,
-        [nodeId]: { ...prev[nodeId], expanded: true, loading: false, childIds },
-      }));
-    } catch (e) {
-      setNodes(prev => ({
-        ...prev,
-        [nodeId]: { ...prev[nodeId], loading: false, error: e.message },
-      }));
     }
-  }, [nodes]);
+    RAW.forEach(root => walk([root], []));
+    return flat;
+  }, []);
+
+  const searchResults = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    return allNodes.filter(n =>
+      n.en.toLowerCase().includes(q) || n.es.toLowerCase().includes(q)
+    ).slice(0, 40);
+  }, [search, allNodes]);
 
   return (
     <div className="mt-8 space-y-6">
+      {/* Header */}
       <div className="border-b border-stone-200 pb-4">
         <div className="flex items-baseline gap-3 mb-1">
-          <h2 className="text-2xl font-bold tracking-tight text-stone-900">Subject Vocabulary</h2>
-          <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 bg-red-700 text-white">LCSH</span>
+          <h2 className="text-2xl font-bold tracking-tight text-stone-900">Mathematics Vocabulary</h2>
+          <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 bg-blue-700 text-white">Tesamat</span>
         </div>
         <p className="text-sm text-stone-500 max-w-2xl leading-relaxed">
-          Library of Congress Subject Headings — the authoritative controlled vocabulary for academic subjects.
-          Click ▶ to expand any heading into its narrower terms.
+          UCM Mathematics Thesaurus — 998 terms with broader/narrower relationships.
+          Click ▶ to expand. Hover any row to generate a reading list.
         </p>
       </div>
 
+      {/* Mode selector */}
       <div>
         <p className="text-[10px] font-mono text-stone-400 uppercase tracking-widest mb-2">Generate as</p>
         <div className="flex flex-wrap gap-1.5">
@@ -208,17 +133,45 @@ export default function KeywordsView({ onGenerate }) {
         </div>
       </div>
 
-      <div className="flex gap-4 text-[9px] font-mono text-stone-400">
-        <span><span className="text-blue-500">▶</span> expand · <span className="text-blue-500">▼</span> collapse · <span className="text-stone-300">·</span> leaf</span>
-        <span className="text-stone-300">hover any row for Generate button · LC↗ opens LOC record</span>
-      </div>
+      {/* Search */}
+      <input
+        type="text"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Search terms…"
+        className="w-full max-w-sm px-3 py-1.5 text-sm border border-stone-300 font-mono focus:outline-none focus:border-stone-500"
+      />
 
-      <div className="border border-stone-200 bg-white">
-        {ROOT_IDS.map(id => (
-          <TreeNode key={id} nodeId={id} nodes={nodes} depth={0}
-            onToggle={toggleNode} onGenerate={onGenerate} mode={mode} />
-        ))}
-      </div>
+      {/* Results / Tree */}
+      {search.trim() ? (
+        <div className="border border-stone-200 bg-white">
+          {searchResults.length === 0
+            ? <div className="p-4 text-sm text-stone-400 font-mono">No matches</div>
+            : searchResults.map(n => (
+              <div key={n.es}
+                className="flex items-start gap-2 py-1.5 px-3 border-b border-stone-50 hover:bg-stone-50 group transition-colors">
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-stone-800">{n.en}</span>
+                  {n.es !== n.en && <span className="ml-1.5 text-[9px] font-mono text-stone-400">{n.es}</span>}
+                  {n.breadcrumb.length > 0 && (
+                    <span className="ml-2 text-[9px] text-stone-400">{n.breadcrumb.join(' › ')}</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => onGenerate(n.en, mode)}
+                  className="shrink-0 text-[8px] font-mono px-2 py-0.5 bg-stone-900 text-white hover:bg-stone-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  → {MODES.find(m => m.key === mode)?.label || 'Canon'}
+                </button>
+              </div>
+            ))}
+        </div>
+      ) : (
+        <div className="border border-stone-200 bg-white">
+          <SubTree nodes={RAW} depth={0}
+            openSet={openSet} onToggle={onToggle} onGenerate={onGenerate} mode={mode} />
+        </div>
+      )}
     </div>
   );
 }

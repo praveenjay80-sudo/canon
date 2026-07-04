@@ -409,7 +409,7 @@ export default function App() {
                   : appMode === 'inquiry'
                   ? 'Enter any field or topic and get the open questions at its frontier — precisely formulated, with what makes each hard, what has been tried, who is working on it, and the best entry point.'
                   : appMode === 'math'
-                  ? 'Browse 15 mathematical domains — from Foundations and Algebra to Emerging Mathematics. Expand any subfield to see its role, click topic chips to refine, and get real textbooks from Open Syllabus and seminal papers from Semantic Scholar.'
+                  ? 'UCM Mathematics Thesaurus (Tesamat) — 998 terms with full broader/narrower hierarchy. Expand any branch, search by keyword, and click → on any term to generate a reading list.'
                   : appMode === 'concepts'
                   ? 'The complete OpenAlex concept hierarchy — 65,025 concepts across 6 levels (Domain → Field → Sub → Topic → Concept → Micro). Select any generation mode, browse the tree, and click → on any concept to generate.'
                   : appMode === 'keywords'
@@ -863,8 +863,8 @@ export default function App() {
               </div>
             )}
 
-            {/* Math Universe Explorer */}
-            {appMode === 'math' && <MathExplorerView />}
+            {/* Math Universe — Tesamat */}
+            {appMode === 'math' && <KeywordsView onGenerate={handleConceptGenerate} />}
 
             {/* OpenAlex Concept Explorer */}
             {appMode === 'concepts' && (
