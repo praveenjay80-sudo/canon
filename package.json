@@ -8,7 +8,9 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "start": "node server.js"
+    "start": "node server.js",
+    "generate-concepts": "node scripts/build-concepts.mjs",
+    "prebuild": "node scripts/build-concepts.mjs"
   },
   "dependencies": {
     "express": "^4.22.2",

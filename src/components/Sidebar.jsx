@@ -1,4 +1,4 @@
-import { TOP_LEVEL_FIELDS } from '../constants/academicFields';
+import ConceptSearch from './ConceptSearch';
 
 function formatDate(iso) {
   const d = new Date(iso);
@@ -16,37 +16,75 @@ function ChevronIcon({ open }) {
   );
 }
 
+function ExternalLinkIcon() {
+  return (
+    <svg width="9" height="9" viewBox="0 0 9 9" fill="none" aria-hidden="true">
+      <path d="M1 8L8 1M8 1H3M8 1V6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function OALink({ url, className = '' }) {
+  if (!url) return null;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={e => e.stopPropagation()}
+      className={`shrink-0 opacity-0 group-hover/row:opacity-100 transition-all text-[9px] font-mono font-semibold tracking-wide text-sky-500 hover:text-sky-700 hover:underline px-1 py-0.5 ${className}`}
+      title="Open in OpenAlex"
+    >
+      OA↗
+    </a>
+  );
+}
+
 function FieldNav({
+  fieldNames, taxonomyLoading, topicCount,
   activeCanonTopic,
   onClickTopLevel, onClickSubfield, onClickSubSubfield,
   isFieldExpanded, isSubfieldExpanded,
   getSubfields, getSubSubfields,
+  getFieldUrl, getSubfieldUrl, getTopicUrl,
   disabled,
 }) {
   return (
     <div className="mb-5">
-      <p className="text-xs font-mono text-stone-400 mb-2">Fields</p>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-mono text-stone-400">Fields</p>
+        {topicCount > 0 && (
+          <span className="text-[10px] font-mono text-stone-400">
+            {topicCount.toLocaleString()} topics
+          </span>
+        )}
+      </div>
+      {taxonomyLoading && (
+        <p className="text-xs text-stone-400 px-2 py-1 animate-pulse">Loading OpenAlex taxonomy…</p>
+      )}
       <ul>
-        {TOP_LEVEL_FIELDS.map(field => {
+        {fieldNames.map(field => {
           const expanded = isFieldExpanded(field);
           const subfields = getSubfields(field);
           const isActive = activeCanonTopic === field;
+          const fieldUrl = getFieldUrl(field);
 
           return (
-            <li key={field}>
+            <li key={field} className="group/row">
               {/* Level 1 */}
-              <button
-                onClick={() => onClickTopLevel(field)}
-                disabled={disabled}
-                className={`w-full text-left px-2 py-1.5 text-sm flex items-center justify-between gap-1 transition-colors disabled:opacity-40 ${
-                  isActive ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'
-                }`}
-              >
-                <span className="truncate">{field}</span>
-                <span className={isActive ? 'text-stone-300' : 'text-stone-400'}>
-                  <ChevronIcon open={expanded} />
-                </span>
-              </button>
+              <div className={`flex items-center transition-colors ${isActive ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'}`}>
+                <button
+                  onClick={() => onClickTopLevel(field)}
+                  disabled={disabled}
+                  className="flex-1 text-left px-2 py-1.5 text-sm flex items-center gap-1 disabled:opacity-40 min-w-0"
+                >
+                  <span className="truncate">{field}</span>
+                  <span className={`shrink-0 ${isActive ? 'text-stone-300' : 'text-stone-400'}`}>
+                    <ChevronIcon open={expanded} />
+                  </span>
+                </button>
+                <OALink url={fieldUrl} className="mr-1" />
+              </div>
 
               {expanded && (
                 <ul className="ml-3 border-l border-stone-200">
@@ -55,41 +93,45 @@ function FieldNav({
                     const sfExpanded = isSubfieldExpanded(sfKey);
                     const sfActive = activeCanonTopic === sf;
                     const subSubfields = getSubSubfields(field, sf);
+                    const sfUrl = getSubfieldUrl(sf);
 
                     return (
-                      <li key={sf}>
+                      <li key={sf} className="group/row">
                         {/* Level 2 */}
-                        <button
-                          onClick={() => onClickSubfield(field, sf)}
-                          disabled={disabled}
-                          className={`w-full text-left pl-2 pr-1 py-1 text-sm flex items-center justify-between gap-1 transition-colors disabled:opacity-40 ${
-                            sfActive ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
-                          }`}
-                        >
-                          <span className="truncate">{sf}</span>
-                          {subSubfields.length > 0 && (
-                            <span className={sfActive ? 'text-stone-300' : 'text-stone-400'}>
-                              <ChevronIcon open={sfExpanded} />
-                            </span>
-                          )}
-                        </button>
+                        <div className={`flex items-center transition-colors ${sfActive ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'}`}>
+                          <button
+                            onClick={() => onClickSubfield(field, sf)}
+                            disabled={disabled}
+                            className="flex-1 text-left pl-2 py-1 text-sm flex items-center gap-1 disabled:opacity-40 min-w-0"
+                          >
+                            <span className="truncate">{sf}</span>
+                            {subSubfields.length > 0 && (
+                              <span className={`shrink-0 ${sfActive ? 'text-stone-300' : 'text-stone-400'}`}>
+                                <ChevronIcon open={sfExpanded} />
+                              </span>
+                            )}
+                          </button>
+                          <OALink url={sfUrl} className="mr-1" />
+                        </div>
 
                         {sfExpanded && subSubfields.length > 0 && (
                           <ul className="ml-3 border-l border-stone-100">
                             {subSubfields.map(ssf => {
                               const ssfActive = activeCanonTopic === ssf;
+                              const topicUrl = getTopicUrl(sf, ssf);
                               return (
-                                <li key={ssf}>
+                                <li key={ssf} className="group/row">
                                   {/* Level 3 */}
-                                  <button
-                                    onClick={() => onClickSubSubfield(ssf)}
-                                    disabled={disabled}
-                                    className={`w-full text-left pl-2 pr-1 py-0.5 text-xs transition-colors disabled:opacity-40 ${
-                                      ssfActive ? 'bg-stone-900 text-white' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-800'
-                                    }`}
-                                  >
-                                    {ssf}
-                                  </button>
+                                  <div className={`flex items-center transition-colors ${ssfActive ? 'bg-stone-900 text-white' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-800'}`}>
+                                    <button
+                                      onClick={() => onClickSubSubfield(ssf)}
+                                      disabled={disabled}
+                                      className="flex-1 text-left pl-2 py-0.5 text-xs disabled:opacity-40"
+                                    >
+                                      {ssf}
+                                    </button>
+                                    <OALink url={topicUrl} className="mr-1" />
+                                  </div>
                                 </li>
                               );
                             })}
@@ -114,11 +156,31 @@ export default function Sidebar({
   onClickTopLevel, onClickSubfield, onClickSubSubfield,
   isFieldExpanded, isSubfieldExpanded,
   getSubfields, getSubSubfields,
+  getFieldUrl, getSubfieldUrl, getTopicUrl,
+  fieldNames, taxonomyLoading, topicCount,
+  onSelectConcept,
   disabled,
 }) {
   return (
     <div className="flex flex-col h-full">
+      <div className="mb-4 pb-3 border-b border-stone-200">
+        <h1 className="text-[11px] font-mono font-bold text-stone-800 uppercase tracking-widest mb-1.5">
+          Academic Navigator
+        </h1>
+        <p className="text-[10px] text-stone-500 leading-relaxed">
+          {taxonomyLoading
+            ? 'Loading live taxonomy from OpenAlex…'
+            : `${fieldNames.length} Fields · ${topicCount.toLocaleString()} Topics — live from OpenAlex`}
+        </p>
+        <p className="text-[10px] text-stone-400 mt-0.5">
+          Click any item to generate its canon reading list. OA↗ links open the source.
+        </p>
+      </div>
+
       <FieldNav
+        fieldNames={fieldNames || []}
+        taxonomyLoading={taxonomyLoading}
+        topicCount={topicCount}
         activeCanonTopic={activeCanonTopic}
         onClickTopLevel={onClickTopLevel}
         onClickSubfield={onClickSubfield}
@@ -127,8 +189,15 @@ export default function Sidebar({
         isSubfieldExpanded={isSubfieldExpanded}
         getSubfields={getSubfields}
         getSubSubfields={getSubSubfields}
+        getFieldUrl={getFieldUrl || (() => null)}
+        getSubfieldUrl={getSubfieldUrl || (() => null)}
+        getTopicUrl={getTopicUrl || (() => null)}
         disabled={disabled}
       />
+
+      <div className="border-t border-stone-200 my-4" />
+
+      <ConceptSearch onSelect={onSelectConcept} disabled={disabled} />
 
       {history.length > 0 && <div className="border-t border-stone-200 mb-4" />}
 

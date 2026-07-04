@@ -21,6 +21,11 @@ Deploy command: `railway up`
 1. **Generate Canon** (`appMode === 'canon'`) — full 5-section or subfield 3-section reading lists
 2. **Pre & Post Requisites** (`appMode === 'reverse'`) — complete prerequisite + postrequisite map for any paper/book
 3. **Curriculum** (`appMode === 'curriculum'`) — university-style curriculum grounded in Open Syllabus Project data
+4. **Dissertation** (`appMode === 'dissertation'`) — 5-tier qualifying exam reading list for any PhD research question
+5. **Canon Drift** (`appMode === 'drift'`) — how a field's canon shifted across 4 eras with DEFINING/RISING/FADING/WATCH tags
+6. **Consilience** (`appMode === 'consilience'`) — cross-disciplinary synthesis: each field's lens, answer, convergences, tensions
+7. **The Inquiry** (`appMode === 'inquiry'`) — open frontier questions: formulated, why hard, what's been tried, entry point
+8. **Math Universe** (`appMode === 'math'`) — browse 15 math domains → subfields → topic chips → ordered reading sequence + beginner explanations
 
 ## File Structure
 

@@ -33,6 +33,8 @@ import ConsilienceInput from './components/ConsilienceInput';
 import ConsilienceView from './components/ConsilienceView';
 import InquiryInput from './components/InquiryInput';
 import InquiryView from './components/InquiryView';
+import MathExplorerView from './components/MathExplorerView';
+import ConceptsExplorerView from './components/ConceptsExplorerView';
 
 function WorkRow({ w }) {
   return (
@@ -150,7 +152,7 @@ export default function App() {
   const [shake, setShake] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [view, setView] = useState('canon');
-  const [appMode, setAppMode] = useState('canon'); // 'canon' | 'reverse' | 'curriculum' | 'dissertation' | 'drift' | 'consilience' | 'inquiry'
+  const [appMode, setAppMode] = useState('canon'); // 'canon' | 'reverse' | 'curriculum' | 'dissertation' | 'drift' | 'consilience' | 'inquiry' | 'math'
 
   const parsed = useMemo(() => parseCanon(gen.content), [gen.content]);
 
@@ -216,12 +218,40 @@ export default function App() {
     fieldNav.clickSubfield(parent, sf);
   }
 
-  function handleClickSubSubfield(ssf) {
+  function handleSelectTopic(topic) {
     enrichment.clear();
     readingOrder.clear();
     setView('canon');
-    gen.generateCanon(ssf, 'subfield');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    switch (appMode) {
+      case 'curriculum':   curriculum.generate(topic);   break;
+      case 'dissertation': dissertation.generate(topic); break;
+      case 'drift':        drift.generate(topic);        break;
+      case 'consilience':  consilience.generate(topic);  break;
+      case 'inquiry':      inquiry.generate(topic);      break;
+      case 'reverse':      reverse.generate(topic);      break;
+      default:             gen.generateCanon(topic, 'subfield'); break;
+    }
+  }
+
+  function handleConceptGenerate(topic, mode) {
+    enrichment.clear();
+    readingOrder.clear();
+    setView('canon');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    switch (mode) {
+      case 'curriculum':   setAppMode('curriculum');   curriculum.generate(topic);   break;
+      case 'dissertation': setAppMode('dissertation'); dissertation.generate(topic); break;
+      case 'drift':        setAppMode('drift');        drift.generate(topic);        break;
+      case 'consilience':  setAppMode('consilience');  consilience.generate(topic);  break;
+      case 'inquiry':      setAppMode('inquiry');      inquiry.generate(topic);      break;
+      case 'reverse':      setAppMode('reverse');      reverse.generate(topic);      break;
+      default:             setAppMode('canon');        gen.generateCanon(topic, 'subfield'); break;
+    }
+  }
+
+  function handleClickSubSubfield(ssf) {
+    handleSelectTopic(ssf);
   }
 
   function handleSave() {
@@ -255,12 +285,12 @@ export default function App() {
               <h1 className="text-6xl font-bold tracking-tight text-stone-900">Canon</h1>
 
               {/* App mode toggle */}
-              <div className="mt-6 flex border-b border-stone-200">
+              <div className="mt-6 flex flex-wrap border-b border-stone-200">
                 <button
                   onClick={() => setAppMode('canon')}
-                  className={`px-4 py-2.5 text-xs font-mono -mb-px transition-colors ${
+                  className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'canon'
-                      ? 'border-b-2 border-stone-900 text-stone-900'
+                      ? 'border-b-2 border-stone-900 text-stone-900 font-semibold'
                       : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
                   }`}
                 >
@@ -268,63 +298,83 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => setAppMode('reverse')}
-                  className={`px-4 py-2.5 text-xs font-mono -mb-px transition-colors ${
+                  className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'reverse'
-                      ? 'border-b-2 border-stone-900 text-stone-900'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                      ? 'border-b-2 border-violet-600 text-violet-700 font-semibold'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-violet-600'
                   }`}
                 >
                   Pre &amp; Post Requisites
                 </button>
                 <button
                   onClick={() => setAppMode('curriculum')}
-                  className={`px-4 py-2.5 text-xs font-mono -mb-px transition-colors ${
+                  className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'curriculum'
-                      ? 'border-b-2 border-stone-900 text-stone-900'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                      ? 'border-b-2 border-sky-600 text-sky-700 font-semibold'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-sky-600'
                   }`}
                 >
                   Curriculum
                 </button>
                 <button
                   onClick={() => setAppMode('dissertation')}
-                  className={`px-4 py-2.5 text-xs font-mono -mb-px transition-colors ${
+                  className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'dissertation'
-                      ? 'border-b-2 border-stone-900 text-stone-900'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                      ? 'border-b-2 border-indigo-600 text-indigo-700 font-semibold'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-indigo-600'
                   }`}
                 >
                   Dissertation
                 </button>
                 <button
                   onClick={() => setAppMode('drift')}
-                  className={`px-4 py-2.5 text-xs font-mono -mb-px transition-colors ${
+                  className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'drift'
-                      ? 'border-b-2 border-stone-900 text-stone-900'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                      ? 'border-b-2 border-amber-500 text-amber-700 font-semibold'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-amber-600'
                   }`}
                 >
                   Canon Drift
                 </button>
                 <button
                   onClick={() => setAppMode('consilience')}
-                  className={`px-4 py-2.5 text-xs font-mono -mb-px transition-colors ${
+                  className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'consilience'
-                      ? 'border-b-2 border-stone-900 text-stone-900'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                      ? 'border-b-2 border-teal-600 text-teal-700 font-semibold'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-teal-600'
                   }`}
                 >
                   Consilience
                 </button>
                 <button
                   onClick={() => setAppMode('inquiry')}
-                  className={`px-4 py-2.5 text-xs font-mono -mb-px transition-colors ${
+                  className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'inquiry'
-                      ? 'border-b-2 border-stone-900 text-stone-900'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                      ? 'border-b-2 border-rose-600 text-rose-700 font-semibold'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-rose-600'
                   }`}
                 >
                   The Inquiry
+                </button>
+                <button
+                  onClick={() => setAppMode('math')}
+                  className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
+                    appMode === 'math'
+                      ? 'border-b-2 border-emerald-600 text-emerald-700 font-semibold'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-emerald-600'
+                  }`}
+                >
+                  Math Universe
+                </button>
+                <button
+                  onClick={() => setAppMode('concepts')}
+                  className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
+                    appMode === 'concepts'
+                      ? 'border-b-2 border-violet-600 text-violet-700 font-semibold'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-violet-600'
+                  }`}
+                >
+                  OpenAlex Concept Explorer
                 </button>
               </div>
 
@@ -344,6 +394,10 @@ export default function App() {
                   ? "Enter any cross-disciplinary question and see what every field says — each discipline's lens, answer, and key works. Surfaces convergences, tensions, and a synthesis no single field can reach alone."
                   : appMode === 'inquiry'
                   ? 'Enter any field or topic and get the open questions at its frontier — precisely formulated, with what makes each hard, what has been tried, who is working on it, and the best entry point.'
+                  : appMode === 'math'
+                  ? 'Browse 15 mathematical domains — from Foundations and Algebra to Emerging Mathematics. Expand any subfield to see its role, click topic chips to refine, and get real textbooks from Open Syllabus and seminal papers from Semantic Scholar.'
+                  : appMode === 'concepts'
+                  ? 'The complete OpenAlex concept hierarchy — 65,025 concepts across 6 levels (Domain → Field → Sub → Topic → Concept → Micro). Select any generation mode, browse the tree, and click → on any concept to generate.'
                   : ''}
               </p>
             </header>
@@ -793,6 +847,17 @@ export default function App() {
               </div>
             )}
 
+            {/* Math Universe Explorer */}
+            {appMode === 'math' && <MathExplorerView />}
+
+            {/* OpenAlex Concept Explorer */}
+            {appMode === 'concepts' && (
+              <ConceptsExplorerView
+                onGenerate={handleConceptGenerate}
+                disabled={false}
+              />
+            )}
+
             {hasOutput && !isGenerating && !isRefining && enrichment.status !== 'idle' && (
               <MissingWorksPanel missing={enrichment.missing} />
             )}
@@ -831,6 +896,13 @@ export default function App() {
                 isSubfieldExpanded={fieldNav.isSubfieldExpanded}
                 getSubfields={fieldNav.getSubfields}
                 getSubSubfields={fieldNav.getSubSubfields}
+                getFieldUrl={fieldNav.getFieldUrl}
+                getSubfieldUrl={fieldNav.getSubfieldUrl}
+                getTopicUrl={fieldNav.getTopicUrl}
+                fieldNames={fieldNav.fieldNames}
+                taxonomyLoading={fieldNav.taxonomyLoading}
+                topicCount={fieldNav.topicCount}
+                onSelectConcept={handleSelectTopic}
                 disabled={isGenerating || isRefining}
               />
             </div>
@@ -872,6 +944,10 @@ export default function App() {
               isSubfieldExpanded={fieldNav.isSubfieldExpanded}
               getSubfields={fieldNav.getSubfields}
               getSubSubfields={fieldNav.getSubSubfields}
+              getFieldUrl={fieldNav.getFieldUrl}
+              getSubfieldUrl={fieldNav.getSubfieldUrl}
+              getTopicUrl={fieldNav.getTopicUrl}
+              fieldNames={fieldNav.fieldNames}
               disabled={isGenerating || isRefining}
             />
           </div>
