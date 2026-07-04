@@ -282,7 +282,10 @@ export default function App() {
         <div className="flex gap-12">
           <div className="flex-1 min-w-0 py-12">
             <header className="mb-10">
-              <h1 className="text-6xl font-bold tracking-tight text-stone-900">Canon</h1>
+              <h1 className="text-6xl font-bold tracking-tight text-stone-900">Multipath</h1>
+              <p className="mt-2 text-base text-stone-500 max-w-2xl leading-relaxed">
+                From any question to a complete scholarly roadmap — reading lists, curricula, prerequisites, dissertations, concept maps, and frontier inquiries across 65,026 academic concepts.
+              </p>
 
               {/* App mode toggle */}
               <div className="mt-6 flex flex-wrap border-b border-stone-200">
