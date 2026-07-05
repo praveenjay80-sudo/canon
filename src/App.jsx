@@ -35,7 +35,7 @@ import InquiryInput from './components/InquiryInput';
 import InquiryView from './components/InquiryView';
 import MathExplorerView from './components/MathExplorerView';
 import KnowledgeMapView from './components/KnowledgeMapView';
-import UDCView from './components/UDCView';
+
 
 function WorkRow({ w }) {
   return (
@@ -371,16 +371,6 @@ export default function App() {
                 >
                   Knowledge Map
                 </button>
-                <button
-                  onClick={() => setAppMode('udc')}
-                  className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
-                    appMode === 'udc'
-                      ? 'border-b-2 border-stone-800 text-stone-900 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
-                  }`}
-                >
-                  UDC
-                </button>
               </div>
 
               {/* Tab description */}
@@ -399,8 +389,6 @@ export default function App() {
                   ? "Enter any cross-disciplinary question and see what every field says — each discipline's lens, answer, and key works. Surfaces convergences, tensions, and a synthesis no single field can reach alone."
                   : appMode === 'inquiry'
                   ? 'Enter any field or topic and get the open questions at its frontier — precisely formulated, with what makes each hard, what has been tried, who is working on it, and the best entry point.'
-                  : appMode === 'udc'
-                  ? 'Universal Decimal Classification — full ETH-UDK vocabulary across 9 UDC main classes. Expand any branch, search by code or term, and generate a reading path.'
                   : appMode === 'knowledge'
                   ? 'All academic disciplines organized into 5 domains — Humanities, Social Science, Natural Science, Formal Science, Applied Science. Browse by discipline group, select any field or sub-field, and generate a reading list.'
                   : ''}
@@ -852,8 +840,7 @@ export default function App() {
               </div>
             )}
 
-            {/* UDC Full */}
-            {appMode === 'udc' && <UDCView onGenerate={handleConceptGenerate} />}
+
 
             {/* Knowledge Map */}
             {appMode === 'knowledge' && <KnowledgeMapView onGenerate={handleConceptGenerate} />}
