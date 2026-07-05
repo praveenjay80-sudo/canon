@@ -297,31 +297,39 @@ export default function ConceptTiersView({ onGenerate }) {
                       const explainActive = explainer.concept === concept;
                       return (
                         <span key={ci} className="group/chip inline-flex items-center gap-0">
+                          {/* Reading path button — arrow icon appears on hover, pulses while loading */}
                           <button
                             onClick={() => readingPath.generate(concept)}
-                            className={`text-[11px] font-mono px-2 py-1 border transition-all ${
-                              pathActive
-                                ? c.active
-                                : `bg-white text-stone-700 border-stone-200 ${c.hover}`
+                            title="Generate reading path from zero"
+                            className={`text-[11px] font-mono px-2 py-1 border transition-all inline-flex items-center gap-1.5 ${
+                              pathActive ? c.active : `bg-white text-stone-700 border-stone-200 ${c.hover}`
                             }`}
                           >
                             {concept}
-                            {pathActive && (
-                              <span className="ml-1 opacity-75 text-[9px]">
-                                {readingPath.status === 'loading' ? '···' : '◆'}
-                              </span>
-                            )}
+                            <svg
+                              className={`shrink-0 w-[9px] h-[9px] transition-opacity ${
+                                pathActive ? 'opacity-90' : 'opacity-0 group-hover/chip:opacity-35'
+                              } ${pathActive && readingPath.status === 'loading' ? 'animate-pulse' : ''}`}
+                              viewBox="0 0 9 9" fill="none"
+                            >
+                              <path d="M2 4.5h5M5 2l2.5 2.5L5 7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
                           </button>
+
+                          {/* Explain button — lightbulb icon, always faintly visible */}
                           <button
                             onClick={() => explain(concept)}
                             title="Explain to a beginner"
-                            className={`text-[9px] font-mono px-1 py-1 border-y border-r transition-all ${
+                            className={`py-1 px-1.5 border-y border-r transition-all flex items-center ${
                               explainActive
-                                ? 'bg-stone-800 text-white border-stone-800'
-                                : 'bg-stone-50 text-stone-400 border-stone-200 opacity-0 group-hover/chip:opacity-100 hover:bg-stone-800 hover:text-white hover:border-stone-800'
+                                ? 'bg-stone-900 text-white border-stone-900'
+                                : 'bg-stone-50 text-stone-400 border-stone-200 opacity-25 group-hover/chip:opacity-100 hover:bg-stone-900 hover:text-white hover:border-stone-900'
                             }`}
                           >
-                            ?
+                            <svg className="w-[9px] h-[9px]" viewBox="0 0 9 9" fill="none">
+                              <path d="M4.5 1a2 2 0 011.5 3.3c-.25.28-.3.5-.3.7H3.3c0-.2-.05-.42-.3-.7A2 2 0 014.5 1z" stroke="currentColor" strokeWidth="1" strokeLinejoin="round"/>
+                              <path d="M3.3 6.2h2.4M3.8 7.5h1.4" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+                            </svg>
                           </button>
                         </span>
                       );
