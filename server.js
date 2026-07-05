@@ -61,6 +61,99 @@ app.get('/api/lcsh/:id', async (req, res) => {
   }
 });
 
+// ── USP Vocabulary proxy (vocabusp.abcd.usp.br) ──────────────────────────────
+
+const HTML_ENTITIES = {
+  Agrave:'À',agrave:'à',Aacute:'Á',aacute:'á',Acirc:'Â',acirc:'â',Atilde:'Ã',atilde:'ã',
+  Auml:'Ä',auml:'ä',Ccedil:'Ç',ccedil:'ç',Egrave:'È',egrave:'è',Eacute:'É',eacute:'é',
+  Ecirc:'Ê',ecirc:'ê',Euml:'Ë',euml:'ë',Iacute:'Í',iacute:'í',Icirc:'Î',icirc:'î',
+  Ntilde:'Ñ',ntilde:'ñ',Oacute:'Ó',oacute:'ó',Ocirc:'Ô',ocirc:'ô',Otilde:'Õ',otilde:'õ',
+  Ouml:'Ö',ouml:'ö',Uacute:'Ú',uacute:'ú',Ucirc:'Û',ucirc:'û',Uuml:'Ü',uuml:'ü',
+  amp:'&',lt:'<',gt:'>',quot:'"',nbsp:' ',
+};
+
+function decodeHtml(s = '') {
+  return s
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+    .replace(/&([A-Za-z]+);/g, (m, e) => HTML_ENTITIES[e] || m)
+    .trim();
+}
+
+// Parse ARV page → return children of parentCode
+function parseArv(html, parentCode) {
+  const parentDepth = parentCode.split('.').length;
+  const results = [];
+  const re = /<A [^>]*HREF="[^"]*ARV\?HIER=([^"&]+)"[^>]*>[^<]*<\/A>\s*([^<\r\n]*)/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const code  = m[1].trim();
+    const label = decodeHtml(m[2].replace(/-\s*/, '').trim());
+    const depth = code.split('.').length;
+    if (depth === parentDepth + 1 && code.startsWith(parentCode + '.') && label) {
+      results.push({ code, label });
+    }
+  }
+  return results;
+}
+
+// Parse Mac page → grouped domains with level-1 fields
+function parseMac(html) {
+  const domains = [];
+  let current = null;
+
+  // Split on H4/H5 headings and ARV links
+  const re = /(<H[45][^>]*>([^<]+)<\/H[45]>)|(<A [^>]*HREF="[^"]*ARV\?Hier=([^"&]+)"[^>]*>[^<]*<\/A>([^<\r\n]*))/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    if (m[1]) {
+      // Heading — new domain group
+      const raw = decodeHtml(m[2]);
+      const match = raw.match(/^([A-Z]{2}\d+)\s+(.*)/);
+      if (match) {
+        current = { code: match[1], label: match[2].trim(), fields: [] };
+        domains.push(current);
+      }
+    } else if (m[3] && current) {
+      // ARV link — level-1 field under current domain
+      const code  = m[4].trim();
+      const label = decodeHtml(m[5].replace(/-\s*/, '').trim());
+      if (label) current.fields.push({ code, label });
+    }
+  }
+  return domains;
+}
+
+app.get('/api/usp/mac', async (req, res) => {
+  const { signal, clear } = withTimeout(10000);
+  try {
+    const r = await fetch('https://vocabusp.abcd.usp.br/Vocab/Sibix652.dll/Mac', {
+      signal, headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    clear();
+    const html = await r.text();
+    res.json(parseMac(html));
+  } catch (e) {
+    clear();
+    res.status(502).json({ error: e.message });
+  }
+});
+
+app.get('/api/usp/arv', async (req, res) => {
+  const code = req.query.code || '';
+  const { signal, clear } = withTimeout(10000);
+  try {
+    const r = await fetch(`https://vocabusp.abcd.usp.br/Vocab/Sibix652.dll/ARV?HIER=${encodeURIComponent(code)}`, {
+      signal, headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    clear();
+    const html = await r.text();
+    res.json(parseArv(html, code));
+  } catch (e) {
+    clear();
+    res.status(502).json({ error: e.message });
+  }
+});
+
 // ── GND proxy (lobid.org) ─────────────────────────────────────────────────────
 
 app.get('/api/gnd/search', async (req, res) => {
