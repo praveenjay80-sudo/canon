@@ -34,9 +34,8 @@ import ConsilienceView from './components/ConsilienceView';
 import InquiryInput from './components/InquiryInput';
 import InquiryView from './components/InquiryView';
 import MathExplorerView from './components/MathExplorerView';
-import ConceptsExplorerView from './components/ConceptsExplorerView';
-import KeywordsView from './components/KeywordsView';
 import KnowledgeMapView from './components/KnowledgeMapView';
+import UDCView from './components/UDCView';
 
 function WorkRow({ w }) {
   return (
@@ -373,24 +372,14 @@ export default function App() {
                   Knowledge Map
                 </button>
                 <button
-                  onClick={() => setAppMode('concepts')}
+                  onClick={() => setAppMode('udc')}
                   className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
-                    appMode === 'concepts'
-                      ? 'border-b-2 border-violet-600 text-violet-700 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-violet-600'
+                    appMode === 'udc'
+                      ? 'border-b-2 border-stone-800 text-stone-900 font-semibold'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
                   }`}
                 >
-                  OpenAlex Concept Explorer
-                </button>
-                <button
-                  onClick={() => setAppMode('keywords')}
-                  className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
-                    appMode === 'keywords'
-                      ? 'border-b-2 border-orange-600 text-orange-700 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-orange-600'
-                  }`}
-                >
-                  Authority Keywords
+                  UDC
                 </button>
               </div>
 
@@ -410,12 +399,10 @@ export default function App() {
                   ? "Enter any cross-disciplinary question and see what every field says — each discipline's lens, answer, and key works. Surfaces convergences, tensions, and a synthesis no single field can reach alone."
                   : appMode === 'inquiry'
                   ? 'Enter any field or topic and get the open questions at its frontier — precisely formulated, with what makes each hard, what has been tried, who is working on it, and the best entry point.'
+                  : appMode === 'udc'
+                  ? 'Universal Decimal Classification — full ETH-UDK vocabulary across 9 UDC main classes. Expand any branch, search by code or term, and generate a reading path.'
                   : appMode === 'knowledge'
                   ? 'All academic disciplines organized into 5 domains — Humanities, Social Science, Natural Science, Formal Science, Applied Science. Browse by discipline group, select any field or sub-field, and generate a reading list.'
-                  : appMode === 'concepts'
-                  ? 'The complete OpenAlex concept hierarchy — 65,025 concepts across 6 levels (Domain → Field → Sub → Topic → Concept → Micro). Select any generation mode, browse the tree, and click → on any concept to generate.'
-                  : appMode === 'keywords'
-                  ? 'Look up any concept in the German National Authority File (GND) and French IDREF/RAMEAU vocabulary. Both show English translations with a structured broader → narrower → related hierarchy. Click any term chip to generate scholarly content.'
                   : ''}
               </p>
             </header>
@@ -865,21 +852,13 @@ export default function App() {
               </div>
             )}
 
+            {/* UDC Full */}
+            {appMode === 'udc' && <UDCView onGenerate={handleConceptGenerate} />}
+
             {/* Knowledge Map */}
             {appMode === 'knowledge' && <KnowledgeMapView onGenerate={handleConceptGenerate} />}
 
-            {/* OpenAlex Concept Explorer */}
-            {appMode === 'concepts' && (
-              <ConceptsExplorerView
-                onGenerate={handleConceptGenerate}
-                disabled={false}
-              />
-            )}
 
-            {/* Authority Keywords — GND + IDREF */}
-            {appMode === 'keywords' && (
-              <KeywordsView onGenerate={handleConceptGenerate} />
-            )}
 
             {hasOutput && !isGenerating && !isRefining && enrichment.status !== 'idle' && (
               <MissingWorksPanel missing={enrichment.missing} />
