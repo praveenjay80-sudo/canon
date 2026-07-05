@@ -54,37 +54,45 @@ async function streamGenerate(apiKey, signal, onProgress) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-5',
-      max_tokens: 8000,
+      max_tokens: 16000,
       stream: true,
       messages: [{ role: 'user', content: GENERATION_PROMPT }],
     }),
     signal,
   });
-  if (!res.ok) throw new Error(`API ${res.status}`);
+
+  if (!res.ok) {
+    let msg = `API error ${res.status}`;
+    try { const err = await res.json(); msg = err.error?.message || msg; } catch {}
+    throw new Error(msg);
+  }
 
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = '', raw = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const lines = buf.split('\n'); buf = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const d = line.slice(6).trim();
-      if (!d || d === '[DONE]') continue;
-      try {
-        const ev = JSON.parse(d);
-        if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
-          raw += ev.delta.text;
-          onProgress(raw);
-        }
-      } catch {}
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n'); buf = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const d = line.slice(6).trim();
+        if (!d || d === '[DONE]') continue;
+        try {
+          const ev = JSON.parse(d);
+          if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+            raw += ev.delta.text;
+            onProgress(raw);
+          }
+        } catch {}
+      }
     }
+  } finally {
+    reader.releaseLock();
   }
-  reader.releaseLock();
   return raw;
 }
 
@@ -92,6 +100,7 @@ export default function ConceptTiersView({ onGenerate }) {
   const [data,     setData]     = useState(null);
   const [status,   setStatus]   = useState('idle'); // idle | loading | done | error
   const [progress, setProgress] = useState(0);
+  const [errorMsg, setErrorMsg] = useState('');
   const abortRef = useRef(null);
   const readingPath = useReadingPath();
 
@@ -106,21 +115,21 @@ export default function ConceptTiersView({ onGenerate }) {
 
   async function generate() {
     const apiKey = resolveApiKey();
-    if (!apiKey) { setStatus('error'); return; }
+    if (!apiKey) { setErrorMsg('No API key — enter your Anthropic key in the header.'); setStatus('error'); return; }
     abortRef.current?.abort();
     abortRef.current = new AbortController();
-    setStatus('loading'); setData(null); setProgress(0);
+    setStatus('loading'); setData(null); setProgress(0); setErrorMsg('');
     try {
       const raw = await streamGenerate(apiKey, abortRef.current.signal, chunk => {
         setProgress(chunk.length);
       });
       const m = raw.match(/\[[\s\S]*\]/);
-      if (!m) throw new Error('No JSON');
+      if (!m) throw new Error(`Response did not contain JSON (got ${raw.length} chars): ${raw.slice(0, 200)}`);
       const parsed = JSON.parse(m[0]);
       localStorage.setItem(CACHE_KEY, JSON.stringify(parsed));
       setData(parsed); setStatus('done');
     } catch (e) {
-      if (e.name !== 'AbortError') setStatus('error');
+      if (e.name !== 'AbortError') { setErrorMsg(e.message); setStatus('error'); }
     }
   }
 
@@ -174,9 +183,9 @@ export default function ConceptTiersView({ onGenerate }) {
       )}
 
       {status === 'error' && (
-        <div className="py-4 text-sm font-mono text-red-500 flex items-center gap-4">
-          Failed — check your API key.
-          <button onClick={generate} className="underline text-stone-500 hover:text-stone-800">Retry</button>
+        <div className="py-4 space-y-2">
+          <div className="text-sm font-mono text-red-600">{errorMsg || 'Unknown error'}</div>
+          <button onClick={generate} className="text-xs font-mono underline text-stone-500 hover:text-stone-800">Retry</button>
         </div>
       )}
 
