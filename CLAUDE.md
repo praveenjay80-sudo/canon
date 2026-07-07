@@ -25,8 +25,10 @@ Deploy command: `railway up`
 5. **Canon Drift** (`appMode === 'drift'`) — how a field's canon shifted across 4 eras with DEFINING/RISING/FADING/WATCH tags
 6. **Consilience** (`appMode === 'consilience'`) — cross-disciplinary synthesis: each field's lens, answer, convergences, tensions
 7. **The Inquiry** (`appMode === 'inquiry'`) — open frontier questions: formulated, why hard, what's been tried, entry point
-8. **Math Universe** (`appMode === 'math'`) — browse 15 math domains → subfields → topic chips → ordered reading sequence + beginner explanations
-9. **Concept Map** (`appMode === 'concepts'`) — 7-tier hierarchy of all scientific knowledge (~700 concepts); click any concept for a reading path from zero · hover for lightbulb explain; cached in localStorage (key: `concept_tiers_v4`)
+8. **Spectrum** (`appMode === 'spectrum'`) — real-life questions whose complete answer genuinely spans multiple disciplines (generated from a topic, tagged with discipline + tier, or typed directly); two-stage pipeline: (1) sonnet-5 generates 6 candidate questions with a "why it spans" justification, (2) picking/typing one triggers OSP + Semantic Scholar harvest + sonnet-5 concept breakdown (plain language, comprehensive) + staged reading list reusing `ReadingOrderView` unmodified
+9. **Field Intelligence** (`appMode === 'intelligence'`) — 3-tab deep analysis: Landscape (all schools of thought), Audit (hidden assumptions + paradigm), Bibliography (exhaustive annotated bibliography with reading order + click-to-expand synopsis)
+10. **Math Universe** (`appMode === 'math'`) — browse 15 math domains → subfields → topic chips → ordered reading sequence + beginner explanations
+11. **Concept Map** (`appMode === 'concepts'`) — 4-tier static hierarchy of 2,575 concepts across 170 groups covering all of human knowledge (science, mathematics, medicine, law, humanities, business); loaded instantly from `public/data/concept-map.json` (no API calls for hierarchy); two-column layout: chips left, sticky 348px side panel right; side panel shows reading path OR explanation with PATH/EXPLAIN tabs when both are active
 
 ## File Structure
 
@@ -40,11 +42,14 @@ Deploy command: `railway up`
 - `src/hooks/useReadingOrder.js` — Claude Haiku: sequences canon into gap-free reading plan, auto-triggers on canon complete
 - `src/hooks/useReverseMode.js` — Claude Sonnet 5: maps prerequisites + postrequisites for any paper/book
 - `src/hooks/useCurriculumMode.js` — two-phase: (1) harvest OSP, (2) Claude Sonnet 5 builds curriculum
+- `src/hooks/useSpectrum.js` — two-stage: (1) Claude Sonnet 5 generates 6 candidate real-life transdisciplinary questions (no harvest), (2) selecting/typing a question triggers OSP + Semantic Scholar harvest then Claude Sonnet 5 concept breakdown + staged reading list in one streamed call; local `streamClaude()` helper shared between both stages
 
 ### Utils
 - `src/utils/parseCanon.js` — markdown → structured canon (sections, works)
 - `src/utils/parsePrerequisites.js` — WORK/FIELD/PHASE/BEYOND/STREAM format parser
 - `src/utils/parseCurriculum.js` — TOPIC/COURSE N/LEVEL/TOTAL CURRICULUM format parser
+- `src/utils/parseSpectrumQuestions.js` — QUESTION N/DISCIPLINES/SPANS format parser for Spectrum's candidate question list
+- `src/utils/parseSpectrumConcepts.js` — QUESTION/CONCEPT/DISCIPLINE/TIER/EXPLANATION/RELEVANCE format parser; stops at `READING LIST:`; also exports `extractReadingListSection()` which slices out the raw PHASE N text handed to `ReadingOrderView`
 - `src/utils/scoreWorks.js` — composite scoring: papers (citation-heavy) vs books (teaching score + editions)
 - `src/utils/harvestData.js` — 8-source parallel harvest (OpenAlex ×3, Semantic Scholar ×2, Google Books, Open Library, Open Syllabus)
 - `src/utils/syllabusHarvest.js` — OSP API: `syllabusSearch(topic, limit)` + `syllabusHarvest(topic)` (4 parallel queries, dedup, top 80)
@@ -56,7 +61,8 @@ Deploy command: `railway up`
 - `src/constants/fields.js` — 3-level field taxonomy (22 top-level fields)
 
 ### Components
-- `src/components/ConceptTiersView.jsx` — 7-tier concept hierarchy; TIER_SPECS with domain strings drive Claude Haiku generation (one API call per tier, 3000 tokens); arrow SVG on chip = reading path, lightbulb SVG = explain (streams via Haiku); cache key `concept_tiers_v4`; always override `parsed.tier = spec.tier` after parse
+- `src/components/ConceptTiersView.jsx` — Concept Map UI; fetches `/data/concept-map.json` on mount (no API for hierarchy); two-column layout (chips left, sticky 348px side panel right); `ExplainContent` renders ANALOGY/WHAT IT IS/REAL-LIFE EXAMPLES/WHY IT MATTERS sections; PATH/EXPLAIN tab switcher when both panels are active; `closePanel(which)` falls back to the other panel if it has content; TIER_COLORS 4 entries (violet/sky/teal/amber)
+- `public/data/concept-map.json` — Static 4-tier concept map; 2,575 concepts across 170 groups; Tier 1 Foundational (9 groups, 133), Tier 2 Core Abstract Structures (13, 203), Tier 3 Fundamental Methods (32, 498), Tier 4 Specific Theories & Applied (116, 1741); covers all sciences + law, humanities, business, geography, criminology, STS
 - `src/components/CanonInput.jsx` — topic input + quick generate
 - `src/components/CanonOutput.jsx` — renders parsed canon; prop `noTopMargin` for tabbed view
 - `src/components/ReadingOrderView.jsx` — PHASE N format, 5 color sets, loading dots
@@ -64,6 +70,9 @@ Deploy command: `railway up`
 - `src/components/PrerequisiteView.jsx` — phases (5 colors: stone/sky/violet/amber/emerald) + Postrequisites streams (dark stone-900)
 - `src/components/CurriculumInput.jsx` — topic input, 6 quick-fill examples, "Build Curriculum" button
 - `src/components/CurriculumView.jsx` — courses (6 colors: sky/indigo/violet/teal/emerald/amber), syllabus count badges
+- `src/components/SpectrumInput.jsx` — topic textbox (generate candidate questions) with a toggle to type a question directly instead
+- `src/components/SpectrumQuestionsView.jsx` — candidate question cards with discipline+tier chips and "why it spans" line; click to select and trigger the answer pipeline
+- `src/components/SpectrumView.jsx` — two-column result: concept cards (plain explanation + relevance) left, `ReadingOrderView` (reused unmodified) right
 - `src/components/Sidebar.jsx` — 3-level field nav + history
 - `src/components/ApiKeyInput.jsx` — Anthropic key input (localStorage `canon_api_key`)
 - `src/components/ActionBar.jsx` — copy/save/regenerate/new

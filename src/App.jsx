@@ -18,6 +18,8 @@ import { useDissertationMode } from './hooks/useDissertationMode';
 import { useCanonDrift } from './hooks/useCanonDrift';
 import { useConsilience } from './hooks/useConsilience';
 import { useInquiry } from './hooks/useInquiry';
+import { useSpectrum } from './hooks/useSpectrum';
+import { useFieldIntelligence } from './hooks/useFieldIntelligence';
 import { parseCanon } from './utils/parseCanon';
 import { copyMarkdown } from './utils/exportMarkdown';
 import ReadingOrderView from './components/ReadingOrderView';
@@ -33,8 +35,12 @@ import ConsilienceInput from './components/ConsilienceInput';
 import ConsilienceView from './components/ConsilienceView';
 import InquiryInput from './components/InquiryInput';
 import InquiryView from './components/InquiryView';
+import SpectrumInput from './components/SpectrumInput';
+import SpectrumQuestionsView from './components/SpectrumQuestionsView';
+import SpectrumView from './components/SpectrumView';
+import FieldIntelligenceInput from './components/FieldIntelligenceInput';
+import FieldIntelligenceView from './components/FieldIntelligenceView';
 import MathExplorerView from './components/MathExplorerView';
-import KnowledgeMapView from './components/KnowledgeMapView';
 import ConceptTiersView from './components/ConceptTiersView';
 
 
@@ -150,11 +156,13 @@ export default function App() {
   const drift = useCanonDrift();
   const consilience = useConsilience();
   const inquiry = useInquiry();
+  const spectrum = useSpectrum();
+  const fieldIntel = useFieldIntelligence();
   const [inputTopic, setInputTopic] = useState('');
   const [shake, setShake] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [view, setView] = useState('canon');
-  const [appMode, setAppMode] = useState('canon'); // 'canon' | 'reverse' | 'curriculum' | 'dissertation' | 'drift' | 'consilience' | 'inquiry' | 'math'
+  const [appMode, setAppMode] = useState('canon'); // 'canon' | 'reverse' | 'curriculum' | 'dissertation' | 'drift' | 'consilience' | 'inquiry' | 'spectrum' | 'intelligence' | 'math'
 
   const parsed = useMemo(() => parseCanon(gen.content), [gen.content]);
 
@@ -361,16 +369,27 @@ export default function App() {
                 >
                   The Inquiry
                 </button>
-
                 <button
-                  onClick={() => setAppMode('knowledge')}
+                  onClick={() => setAppMode('spectrum')}
                   className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
-                    appMode === 'knowledge'
-                      ? 'border-b-2 border-stone-800 text-stone-900 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                    appMode === 'spectrum'
+                      ? 'border-b-2 border-cyan-600 text-cyan-700 font-semibold'
+                      : 'border-b-2 border-transparent text-stone-400 hover:text-cyan-600'
                   }`}
                 >
-                  Knowledge Map
+                  Spectrum
+                </button>
+
+                <button
+                  onClick={() => setAppMode('intelligence')}
+                  className={`ml-3 px-4 py-2 text-sm font-mono -mb-px transition-all flex items-center gap-2 ${
+                    appMode === 'intelligence'
+                      ? 'bg-emerald-700 text-white font-bold border-b-2 border-emerald-700 shadow-sm'
+                      : 'border border-emerald-200 border-b-2 border-b-transparent text-emerald-700 font-semibold hover:bg-emerald-50'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${appMode === 'intelligence' ? 'bg-emerald-300' : 'bg-emerald-500'}`} />
+                  Field Intelligence
                 </button>
                 <button
                   onClick={() => setAppMode('concepts')}
@@ -400,8 +419,12 @@ export default function App() {
                   ? "Enter any cross-disciplinary question and see what every field says — each discipline's lens, answer, and key works. Surfaces convergences, tensions, and a synthesis no single field can reach alone."
                   : appMode === 'inquiry'
                   ? 'Enter any field or topic and get the open questions at its frontier — precisely formulated, with what makes each hard, what has been tried, who is working on it, and the best entry point.'
+                  : appMode === 'spectrum'
+                  ? 'Enter a topic and get real-life questions whose complete answer genuinely spans multiple disciplines — or type your own. Get a plain-language concept breakdown and a staged reading list grounded in real literature.'
+                  : appMode === 'intelligence'
+                  ? 'Map any field\'s complete intellectual landscape — all schools of thought, key interlocutors, and the central argument structure. Then audit its hidden assumptions and paradigm status.'
                   : appMode === 'knowledge'
-                  ? 'All academic disciplines organized into 5 domains — Humanities, Social Science, Natural Science, Formal Science, Applied Science. Browse by discipline group, select any field or sub-field, and generate a reading list.'
+                  ? ''
                   : appMode === 'concepts'
                   ? '600+ fundamental scientific concepts — from pure logic to applied models — ordered across 7 tiers by generality. Generated by Claude on first load, cached permanently. Click any concept for a reading path.'
                   : ''}
@@ -461,6 +484,21 @@ export default function App() {
               <InquiryInput
                 onGenerate={inquiry.generate}
                 disabled={inquiry.phase === 'harvesting' || inquiry.phase === 'generating'}
+              />
+            )}
+
+            {appMode === 'spectrum' && (
+              <SpectrumInput
+                onGenerateQuestions={spectrum.generateQuestions}
+                onSubmitDirect={spectrum.submitDirectQuestion}
+                disabled={['listing', 'harvesting', 'generating'].includes(spectrum.phase)}
+              />
+            )}
+
+            {appMode === 'intelligence' && !fieldIntel.currentTopic && (
+              <FieldIntelligenceInput
+                onGenerate={fieldIntel.generate}
+                disabled={false}
               />
             )}
 
@@ -853,10 +891,102 @@ export default function App() {
               </div>
             )}
 
+            {/* Spectrum mode */}
+            {appMode === 'spectrum' && spectrum.phase === 'listing' && (
+              <div className="mt-8 border border-stone-200 bg-white px-6 py-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex gap-0.5">
+                    <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                  </span>
+                  <span className="text-sm text-stone-500">Finding questions that genuinely span disciplines...</span>
+                </div>
+              </div>
+            )}
+            {appMode === 'spectrum' && spectrum.phase === 'listed' && (
+              <SpectrumQuestionsView
+                listParsed={spectrum.listParsed}
+                isStreaming={false}
+                onSelect={spectrum.selectQuestion}
+              />
+            )}
+            {appMode === 'spectrum' && spectrum.phase === 'harvesting' && (
+              <div className="mt-8 border border-stone-200 bg-white px-6 py-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex gap-0.5">
+                    <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                  </span>
+                  <span className="text-sm text-stone-500">Gathering literature across disciplines...</span>
+                </div>
+              </div>
+            )}
+            {appMode === 'spectrum' && spectrum.phase === 'generating' && (
+              <div className="mt-8 border border-stone-200 bg-white px-6 py-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex gap-0.5">
+                    <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                  </span>
+                  <span className="text-sm text-stone-500">Building the answer from {spectrum.dataCount} works...</span>
+                </div>
+              </div>
+            )}
+            {appMode === 'spectrum' && spectrum.phase === 'error' && (
+              <div className="mt-8 p-5 bg-red-50 border border-red-200">
+                <p className="font-medium text-red-900 text-sm">Failed</p>
+                <p className="text-sm text-red-700 mt-1">{spectrum.error}</p>
+              </div>
+            )}
+            {appMode === 'spectrum' && (spectrum.phase === 'generating' || spectrum.phase === 'complete') && spectrum.parsed && (
+              <SpectrumView parsed={spectrum.parsed} readingListText={spectrum.readingListText} isStreaming={spectrum.phase === 'generating'} />
+            )}
+            {appMode === 'spectrum' && spectrum.phase === 'complete' && (
+              <div className="mt-8 pt-6 border-t border-stone-200 flex gap-2">
+                <button
+                  onClick={() => navigator.clipboard.writeText(spectrum.content)}
+                  className="px-4 py-2 text-sm border border-stone-300 text-stone-700 hover:bg-stone-50 transition-colors"
+                >
+                  Copy Text
+                </button>
+                <button
+                  onClick={spectrum.reset}
+                  className="px-4 py-2 text-sm bg-stone-900 text-white hover:bg-stone-700 transition-colors"
+                >
+                  New Question
+                </button>
+              </div>
+            )}
 
 
-            {/* Knowledge Map */}
-            {appMode === 'knowledge' && <KnowledgeMapView onGenerate={handleConceptGenerate} />}
+            {/* Field Intelligence mode */}
+            {appMode === 'intelligence' && fieldIntel.landscapePhase === 'error' && (
+              <div className="mt-8 p-5 bg-red-50 border border-red-200">
+                <p className="font-medium text-red-900 text-sm">Failed</p>
+                <p className="text-sm text-red-700 mt-1">{fieldIntel.error}</p>
+              </div>
+            )}
+            {appMode === 'intelligence' && !!fieldIntel.currentTopic && (
+              <FieldIntelligenceView
+                landscapePhase={fieldIntel.landscapePhase}
+                auditPhase={fieldIntel.auditPhase}
+                bibPhase={fieldIntel.bibPhase}
+                thinkersPhase={fieldIntel.thinkersPhase}
+                parsedLandscape={fieldIntel.parsedLandscape}
+                parsedAudit={fieldIntel.parsedAudit}
+                parsedBib={fieldIntel.parsedBib}
+                parsedThinkers={fieldIntel.parsedThinkers}
+                dataCount={fieldIntel.dataCount}
+                currentTopic={fieldIntel.currentTopic}
+                landscapeContent={fieldIntel.landscapeContent}
+                auditContent={fieldIntel.auditContent}
+                bibContent={fieldIntel.bibContent}
+                thinkersContent={fieldIntel.thinkersContent}
+                onGenerateLandscape={fieldIntel.generateLandscape}
+                onGenerateAudit={fieldIntel.generateAudit}
+                onGenerateBib={fieldIntel.generateBib}
+                onGenerateThinkers={fieldIntel.generateThinkers}
+                onReset={fieldIntel.reset}
+              />
+            )}
+
 
             {/* Concept Map */}
             {appMode === 'concepts' && <ConceptTiersView onGenerate={handleConceptGenerate} />}
