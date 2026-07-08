@@ -107,13 +107,21 @@ function normalizeStageName(s) {
 // OpenAlex, so verify anything load-bearing yourself (the Google Scholar
 // links on each entry are a real, deterministic search — not AI-generated
 // — for exactly that purpose).
-async function generateReadingOrder(topicName) {
+async function generateReadingOrder(topicName, subfieldName) {
   const apiKey = resolveApiKey();
   if (!apiKey) return null;
 
   const stageBlock = READING_STAGES.map(s => `STAGE: ${s}\n(${STAGE_DEFINITIONS[s]})`).join('\n\n');
   const system = `You build comprehensive, pedagogically-ordered reading lists for academic topics. Only name real, verifiable books and papers you are confident actually exist, with accurate author and year. Never invent or approximate a title, author, or year you are not sure of — it is far better to list fewer genuinely real works in a stage than to pad it with an invented one.`;
-  const user = `Topic: "${topicName}"
+  // A topic name alone can be ambiguous across fields (confirmed: "Advanced
+  // Algebra and Geometry" picked under the Mathematical Physics subfield
+  // still generated a pure-math reading list, because nothing told Claude
+  // which subfield's lens to read the topic through). Naming the subfield
+  // explicitly disambiguates which reading of the topic is wanted.
+  const topicLine = subfieldName
+    ? `Topic: "${topicName}", specifically as studied within the "${subfieldName}" subfield — not how a different field would treat a similarly-named topic. If this subfield gives the topic a distinct character or angle (e.g. its physics/applied treatment rather than the pure-math one, or vice versa), the reading list must reflect that angle throughout, not a generic version of the topic.`
+    : `Topic: "${topicName}"`;
+  const user = `${topicLine}
 
 Build a comprehensive reading list for this topic, organized into exactly these six pedagogical stages in this order:
 
@@ -305,10 +313,11 @@ export function usePulse() {
   const [readingStagesLoading, setReadingStagesLoading] = useState(false);
   const [readingStagesFailed, setReadingStagesFailed] = useState(false);
   const cancelRef = useRef({ aborted: false });
+  const subfieldNameRef = useRef('');
 
   const hasScholarKey = !!localStorage.getItem('canon_serp_key');
 
-  const select = useCallback(async (topicId, name, subfieldId) => {
+  const select = useCallback(async (topicId, name, subfieldId, subfieldName) => {
     cancelRef.current.aborted = true;
     const token = { aborted: false };
     cancelRef.current = token;
@@ -316,6 +325,7 @@ export function usePulse() {
     setPhase('loading');
     setError(null);
     setTopicName(name);
+    subfieldNameRef.current = subfieldName || '';
     setMostCited([]);
     setTopAuthors([]);
     setMostInfluential([]);
@@ -402,7 +412,7 @@ export function usePulse() {
     if (readingStageGroups || readingStagesLoading || !topicName) return;
     setReadingStagesLoading(true);
     setReadingStagesFailed(false);
-    const groups = await generateReadingOrder(topicName);
+    const groups = await generateReadingOrder(topicName, subfieldNameRef.current);
     // Every stage coming back empty is essentially always a parsing failure,
     // not Claude genuinely knowing nothing — confirmed twice on mainstream
     // topics ("Stochastic processes and statistical mechanics", "Quantum

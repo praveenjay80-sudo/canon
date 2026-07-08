@@ -35,14 +35,17 @@ export default function PulseInput({ onSelect, disabled }) {
     setTopic(v);
     if (!v) return;
     const t = topics.find(x => x.name === v);
-    // Always pass the subfield id, even for a native pick — Reading Order's
-    // stage-backfill search needs it regardless of how the topic was chosen.
-    if (t && t.url) { onSelect(t.url, t.name, taxonomy?.subfieldUrls?.[subfield]); return; }
+    // Always pass the subfield id/name, even for a native pick — Reading
+    // Order needs the subfield name to frame an ambiguous topic correctly
+    // (confirmed: "Advanced Algebra and Geometry" picked under Mathematical
+    // Physics generated a pure-math reading list, because the generator only
+    // ever saw the bare topic string with no subfield context at all).
+    if (t && t.url) { onSelect(t.url, t.name, taxonomy?.subfieldUrls?.[subfield], subfield); return; }
     // No OpenAlex id — this came from Claude's suggestion list, so Pulse falls
     // back to a text search instead of an exact topics.id filter. Pass the
     // subfield's own id along so that search stays constrained to it, instead
     // of matching word-overlap across unrelated subfields.
-    onSelect(null, v, taxonomy?.subfieldUrls?.[subfield]);
+    onSelect(null, v, taxonomy?.subfieldUrls?.[subfield], subfield);
   }
 
   const selectClass = "flex-1 px-3 py-2.5 text-sm border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-stone-700 transition-colors disabled:opacity-50 disabled:bg-stone-50";
