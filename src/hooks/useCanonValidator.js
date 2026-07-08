@@ -34,17 +34,21 @@ function mapWork(w) {
   };
 }
 
+// SerpAPI sends no CORS headers and shouldn't have its key exposed client-side
+// anyway, so this must route through the canon-enrichment worker's
+// /scholar-search endpoint rather than calling serpapi.com directly.
 async function serpScholarSearch(query, apiKey, limit = 20) {
-  const url = `https://serpapi.com/search.json?engine=google_scholar&q=${encodeURIComponent(query)}&api_key=${apiKey}&num=${limit}`;
-  const res = await fetch(url);
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.organic_results || []).map(r => ({
+  const params = new URLSearchParams({ q: query, num: String(limit) });
+  if (apiKey) params.set('key', apiKey);
+  const res = await fetch(`https://canon-enrichment.canonworks.workers.dev/scholar-search?${params}`);
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !Array.isArray(data)) return [];
+  return data.map(r => ({
     title: r.title || '',
-    authors: (r.publication_info?.authors || []).map(a => a.name).join(', '),
-    year: r.publication_info?.summary?.match(/\d{4}/)?.[0] || null,
-    citationCount: r.inline_links?.cited_by?.total || 0,
-    snippet: r.snippet || '',
+    authors: r.authors || '',
+    year: r.year || null,
+    citationCount: r.citationCount || 0,
+    snippet: '',
     link: r.link || '',
     fwci: null,
     isOA: false,

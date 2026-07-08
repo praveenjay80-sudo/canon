@@ -16,7 +16,7 @@ function ScholarKeyPrompt({ onSaved }) {
 
   return (
     <div className="px-5 py-6">
-      <p className="text-sm text-stone-500 mb-3">Add a SerpAPI key to see Google Scholar results for this topic.</p>
+      <p className="text-sm text-stone-500 mb-3">The shared Google Scholar lookup didn't return results (likely quota-limited). Add your own SerpAPI key to see results for this topic.</p>
       <div className="flex gap-2">
         <input
           type="password"
@@ -92,7 +92,7 @@ function Panel({ title, subtitle, items, renderMetric, renderLink, emptyText, em
 }
 
 export default function PulseView({
-  topicName, mostCited, rising, mostInfluential, scholar, scholarLoading, hasScholarKey, onScholarKeySaved,
+  topicName, mostCited, rising, mostInfluential, scholar, scholarLoading, scholarFailed, onScholarKeySaved,
 }) {
   const asOf = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
@@ -134,7 +134,7 @@ export default function PulseView({
           renderMetric={w => `${w.citationCount.toLocaleString()} cit.`}
           renderLink={w => w.link || null}
           emptyText="No Google Scholar results found."
-          emptyContent={!hasScholarKey ? <ScholarKeyPrompt onSaved={onScholarKeySaved} /> : undefined}
+          emptyContent={scholarFailed ? <ScholarKeyPrompt onSaved={onScholarKeySaved} /> : undefined}
         />
       </div>
     </div>

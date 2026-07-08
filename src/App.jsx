@@ -1003,7 +1003,7 @@ export default function App() {
                 mostInfluential={pulse.mostInfluential}
                 scholar={pulse.scholar}
                 scholarLoading={pulse.scholarLoading}
-                hasScholarKey={pulse.hasScholarKey}
+                scholarFailed={pulse.scholarFailed}
                 onScholarKeySaved={pulse.refreshScholar}
               />
             )}

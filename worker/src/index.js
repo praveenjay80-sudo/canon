@@ -56,6 +56,26 @@ async function scholarSearch(title, author, apiKey) {
   };
 }
 
+function extractAuthors(authors) {
+  return (authors || []).map(a => a.name).filter(Boolean).join(', ');
+}
+
+async function scholarTopicSearch(query, apiKey, num) {
+  const url = `https://serpapi.com/search.json?engine=google_scholar&q=${encodeURIComponent(query)}&num=${num}&api_key=${apiKey}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`SerpAPI ${res.status}`);
+  const data = await res.json();
+  return (data.organic_results || [])
+    .map(r => ({
+      title: r.title || '',
+      authors: extractAuthors(r.publication_info?.authors),
+      year: extractYear(r.publication_info?.summary),
+      citationCount: r.inline_links?.cited_by?.total ?? 0,
+      link: r.link || '',
+    }))
+    .sort((a, b) => b.citationCount - a.citationCount);
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -63,6 +83,42 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    // Browser-side calls straight to SerpAPI are blocked (no CORS headers on
+    // their end, and it would expose the key client-side anyway) — every
+    // Scholar-touching feature must route through this worker instead.
+    // A caller-supplied `key` takes priority over the worker's own
+    // SERPAPI_KEY secret, so BYOK users aren't limited by the shared quota.
+    if (url.pathname === '/scholar-search') {
+      const q = url.searchParams.get('q')?.trim();
+      const num = Math.min(parseInt(url.searchParams.get('num') || '20', 10) || 20, 20);
+      const apiKey = url.searchParams.get('key')?.trim() || env.SERPAPI_KEY;
+
+      if (!q) return json({ error: 'q required' }, 400);
+      if (!apiKey) return json({ error: 'No SerpAPI key available' }, 500);
+
+      try {
+        const cacheKey = `scholarsearch:${q.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 60)}`;
+        const usingSharedKey = apiKey === env.SERPAPI_KEY;
+        if (usingSharedKey && env.CACHE) {
+          const cached = await env.CACHE.get(cacheKey);
+          if (cached) return json(JSON.parse(cached));
+        }
+
+        const results = await scholarTopicSearch(q, apiKey, num);
+
+        // Only cache results fetched with the shared key — caching a
+        // BYOK user's results under a query-only key would leak them
+        // to other users of the shared key for the same query.
+        if (usingSharedKey && env.CACHE) {
+          await env.CACHE.put(cacheKey, JSON.stringify(results), { expirationTtl: 86400 });
+        }
+
+        return json(results);
+      } catch (err) {
+        return json({ error: err.message }, 500);
+      }
+    }
 
     if (url.pathname !== '/enrich') {
       return json({ error: 'Not found' }, 404);

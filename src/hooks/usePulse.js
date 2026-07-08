@@ -1,21 +1,23 @@
 import { useState, useCallback, useRef } from 'react';
 import { fetchTopicWorks, recentCitationVelocity } from '../utils/pulseOpenAlex';
 
+const WORKER_BASE = 'https://canon-enrichment.canonworks.workers.dev';
+
+// Google Scholar has no public API, and SerpAPI (the paid proxy for it) does not
+// send CORS headers and shouldn't have its key exposed client-side anyway — so
+// this must go through the canon-enrichment Cloudflare Worker's /scholar-search
+// route, not straight to serpapi.com. A user-supplied key (if set) is passed
+// through and takes priority server-side over the worker's own shared key.
 async function serpScholarSearch(query, apiKey, limit = 20) {
-  const url = `https://serpapi.com/search.json?engine=google_scholar&q=${encodeURIComponent(query)}&api_key=${apiKey}&num=${limit}`;
+  const params = new URLSearchParams({ q: query, num: String(limit) });
+  if (apiKey) params.set('key', apiKey);
   try {
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.organic_results || []).map(r => ({
-      title: r.title || '',
-      authors: (r.publication_info?.authors || []).map(a => a.name).join(', '),
-      year: r.publication_info?.summary?.match(/\d{4}/)?.[0] || null,
-      citationCount: r.inline_links?.cited_by?.total || 0,
-      link: r.link || '',
-    })).sort((a, b) => b.citationCount - a.citationCount);
+    const res = await fetch(`${WORKER_BASE}/scholar-search?${params}`);
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !Array.isArray(data)) return { ok: false, results: [] };
+    return { ok: true, results: data };
   } catch {
-    return [];
+    return { ok: false, results: [] };
   }
 }
 
@@ -61,6 +63,7 @@ export function usePulse() {
   const [rising, setRising] = useState([]);
   const [mostInfluential, setMostInfluential] = useState([]);
   const [scholar, setScholar] = useState([]);
+  const [scholarFailed, setScholarFailed] = useState(false);
   const [scholarLoading, setScholarLoading] = useState(false);
   const cancelRef = useRef({ aborted: false });
 
@@ -78,19 +81,21 @@ export function usePulse() {
     setRising([]);
     setMostInfluential([]);
     setScholar([]);
+    setScholarFailed(false);
 
     const serpKey = localStorage.getItem('canon_serp_key') || '';
 
     try {
-      const [works, scholarResults] = await Promise.all([
+      const [works, scholarOutcome] = await Promise.all([
         fetchTopicWorks(topicId, 30),
-        serpKey ? serpScholarSearch(name, serpKey, 20) : Promise.resolve([]),
+        serpScholarSearch(name, serpKey, 20),
       ]);
       if (token.aborted) return;
 
       setMostCited(works);
       setRising([...works].sort((a, b) => recentCitationVelocity(b) - recentCitationVelocity(a)));
-      setScholar(scholarResults);
+      setScholar(scholarOutcome.results);
+      setScholarFailed(!scholarOutcome.ok);
 
       const dois = works.map(w => w.doi).filter(Boolean).slice(0, 30);
       const influential = await fetchInfluentialByDoi(dois);
@@ -109,11 +114,12 @@ export function usePulse() {
   // Re-fetches only the Scholar panel — used right after a SerpAPI key is saved
   // from Pulse's own inline prompt, without re-running the OpenAlex/S2 calls.
   const refreshScholar = useCallback(async () => {
+    if (!topicName) return;
     const serpKey = localStorage.getItem('canon_serp_key') || '';
-    if (!serpKey || !topicName) return;
     setScholarLoading(true);
-    const results = await serpScholarSearch(topicName, serpKey, 20);
-    setScholar(results);
+    const outcome = await serpScholarSearch(topicName, serpKey, 20);
+    setScholar(outcome.results);
+    setScholarFailed(!outcome.ok);
     setScholarLoading(false);
   }, [topicName]);
 
@@ -126,10 +132,11 @@ export function usePulse() {
     setRising([]);
     setMostInfluential([]);
     setScholar([]);
+    setScholarFailed(false);
   }, []);
 
   return {
-    phase, error, topicName, mostCited, rising, mostInfluential, scholar, scholarLoading,
+    phase, error, topicName, mostCited, rising, mostInfluential, scholar, scholarFailed, scholarLoading,
     hasScholarKey, select, reset, refreshScholar,
   };
 }
