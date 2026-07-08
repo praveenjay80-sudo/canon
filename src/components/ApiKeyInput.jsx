@@ -149,6 +149,15 @@ export default function ApiKeyInput() {
             linkHref="https://serpapi.com/manage-api-key"
             optional
           />
+          <KeyField
+            storageKey="canon_openalex_key"
+            label="OpenAlex API Key"
+            placeholder="openalex key..."
+            description="OpenAlex now rate-limits keyless requests hard — add a free key to avoid 429s across every mode that pulls citation data. Stored in this browser only."
+            linkText="openalex.org/settings/api"
+            linkHref="https://openalex.org/settings/api"
+            optional
+          />
         </div>
       )}
     </div>

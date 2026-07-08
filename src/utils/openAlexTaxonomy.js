@@ -1,3 +1,5 @@
+import { openAlexAuth } from './openAlexAuth';
+
 const CACHE_KEY = 'openalex_taxonomy_v2';
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const MAILTO = 'mailto=praveen.jay80@gmail.com';
@@ -6,7 +8,7 @@ async function fetchAllPages(baseUrl) {
   const results = [];
   let page = 1;
   while (true) {
-    const res = await fetch(`${baseUrl}&page=${page}&per-page=200&${MAILTO}`);
+    const res = await fetch(`${baseUrl}&page=${page}&per-page=200&${MAILTO}${openAlexAuth()}`);
     if (!res.ok) throw new Error(`OpenAlex fetch failed: ${res.status}`);
     const json = await res.json();
     results.push(...(json.results || []));

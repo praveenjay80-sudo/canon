@@ -1,4 +1,5 @@
 import { syllabusSearch } from './syllabusHarvest';
+import { openAlexAuth } from './openAlexAuth';
 
 const OA_BASE = 'https://api.openalex.org';
 const MAILTO = 'canon-app@praveen.dev';
@@ -11,7 +12,7 @@ function fetchWithTimeout(url, ms = 12000) {
 
 async function fetchOABroad(topic, limit = 100) {
   const fields = 'title,authorships,publication_year,cited_by_count,type';
-  const url = `${OA_BASE}/works?search=${encodeURIComponent(topic)}&sort=cited_by_count:desc&per-page=${limit}&select=${fields}&mailto=${MAILTO}`;
+  const url = `${OA_BASE}/works?search=${encodeURIComponent(topic)}&sort=cited_by_count:desc&per-page=${limit}&select=${fields}&mailto=${MAILTO}${openAlexAuth()}`;
   try {
     const res = await fetchWithTimeout(url);
     if (!res.ok) return [];

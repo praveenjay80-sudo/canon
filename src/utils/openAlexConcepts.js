@@ -1,3 +1,5 @@
+import { openAlexAuth } from './openAlexAuth';
+
 const L0_CACHE_KEY = 'openalex_concepts_l0_v1';
 const MAILTO = 'mailto=praveen.jay80@gmail.com';
 
@@ -15,7 +17,7 @@ export async function getLevel0() {
   } catch {}
 
   const res = await fetch(
-    `https://api.openalex.org/concepts?filter=level:0&per-page=200&${MAILTO}`
+    `https://api.openalex.org/concepts?filter=level:0&per-page=200&${MAILTO}${openAlexAuth()}`
   );
   if (!res.ok) throw new Error('OpenAlex concepts fetch failed');
   const json = await res.json();
@@ -36,7 +38,7 @@ export async function fetchChildren(parentSid, childLevel) {
   const url =
     `https://api.openalex.org/concepts` +
     `?filter=ancestors.id:${parentSid},level:${childLevel}` +
-    `&per-page=80&${MAILTO}`;
+    `&per-page=80&${MAILTO}${openAlexAuth()}`;
 
   const res = await fetch(url);
   if (!res.ok) return [];

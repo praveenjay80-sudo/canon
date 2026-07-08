@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { openAlexAuth } from '../utils/openAlexAuth';
 
 const MAILTO = 'mailto=praveen.jay80@gmail.com';
 
@@ -36,7 +37,7 @@ export default function ConceptSearch({ onSelect, disabled }) {
     setLoading(true);
     try {
       const res = await fetch(
-        `https://api.openalex.org/concepts?search=${encodeURIComponent(q)}&per-page=12&${MAILTO}`,
+        `https://api.openalex.org/concepts?search=${encodeURIComponent(q)}&per-page=12&${MAILTO}${openAlexAuth()}`,
         { signal: abortRef.current.signal }
       );
       if (!res.ok) throw new Error('fetch failed');

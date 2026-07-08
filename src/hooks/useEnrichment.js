@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { openAlexAuth } from '../utils/openAlexAuth';
 
 const OA_BASE = 'https://api.openalex.org';
 const OA_FIELDS = 'title,publication_year,cited_by_count,fwci,type,open_access,cited_by_percentile_year,primary_location,authorships';
@@ -44,11 +45,11 @@ async function crossrefLookup(title, author) {
 async function oaLookup(title) {
   const encoded = encodeURIComponent(title);
   try {
-    let res = await fetchWithTimeout(`${OA_BASE}/works?filter=title.search:${encoded}&select=${OA_FIELDS}&per_page=5&mailto=canon-app`);
+    let res = await fetchWithTimeout(`${OA_BASE}/works?filter=title.search:${encoded}&select=${OA_FIELDS}&per_page=5&mailto=canon-app${openAlexAuth()}`);
     let results = [];
     if (res.ok) { const data = await res.json(); results = data.results || []; }
     if (!results.length) {
-      res = await fetchWithTimeout(`${OA_BASE}/works?search=${encoded}&select=${OA_FIELDS}&per_page=8&mailto=canon-app`);
+      res = await fetchWithTimeout(`${OA_BASE}/works?search=${encoded}&select=${OA_FIELDS}&per_page=8&mailto=canon-app${openAlexAuth()}`);
       if (res.ok) { const data = await res.json(); results = data.results || []; }
     }
     const match = results.find(r => titlesMatch(r.title || '', title));
@@ -68,7 +69,7 @@ async function oaLookup(title) {
 }
 
 async function oaTopicSearch(topic, limit = 50) {
-  const url = `${OA_BASE}/works?search=${encodeURIComponent(topic)}&select=title,authorships,publication_year,cited_by_count,fwci,type,open_access,primary_location&per_page=${limit}&sort=cited_by_count:desc&mailto=canon-app`;
+  const url = `${OA_BASE}/works?search=${encodeURIComponent(topic)}&select=title,authorships,publication_year,cited_by_count,fwci,type,open_access,primary_location&per_page=${limit}&sort=cited_by_count:desc&mailto=canon-app${openAlexAuth()}`;
   try {
     const res = await fetchWithTimeout(url);
     if (!res.ok) return [];

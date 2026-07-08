@@ -1,3 +1,5 @@
+import { openAlexAuth } from './openAlexAuth';
+
 const MAILTO = 'mailto=canon-app@praveen.dev';
 
 async function fetchWithTimeout(url, options = {}, ms = 12000) {
@@ -55,7 +57,7 @@ function isNoisyTitle(title) {
 
 export async function fetchTopicWorks(topicId, limit = 30) {
   const fetchLimit = Math.min(limit * 3, 100);
-  const url = `https://api.openalex.org/works?filter=topics.id:${encodeURIComponent(bareId(topicId))},type:article|book&select=title,authorships,publication_year,cited_by_count,fwci,type,open_access,primary_location,doi,counts_by_year&sort=cited_by_count:desc&per_page=${fetchLimit}&${MAILTO}`;
+  const url = `https://api.openalex.org/works?filter=topics.id:${encodeURIComponent(bareId(topicId))},type:article|book&select=title,authorships,publication_year,cited_by_count,fwci,type,open_access,primary_location,doi,counts_by_year&sort=cited_by_count:desc&per_page=${fetchLimit}&${MAILTO}${openAlexAuth()}`;
   const res = await fetchWithTimeout(url);
   if (!res.ok) throw new Error(`OpenAlex fetch failed: ${res.status}`);
   const json = await res.json();

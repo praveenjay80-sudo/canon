@@ -1,4 +1,5 @@
 import { syllabusSearch } from './syllabusHarvest';
+import { openAlexAuth } from './openAlexAuth';
 
 const OA_BASE   = 'https://api.openalex.org';
 const S2_BASE   = 'https://api.semanticscholar.org/graph/v1';
@@ -58,7 +59,7 @@ function oaWork(w, sourceTag) {
 // ── 1. OpenAlex: top papers by all-time citations ────────────────────────────
 async function harvestOAPapers(topic, limit = 60) {
   const fields = 'title,authorships,publication_year,cited_by_count,fwci,type,open_access,primary_location,doi';
-  const url = `${OA_BASE}/works?search=${encodeURIComponent(topic)}&filter=type:article&select=${fields}&per_page=${limit}&sort=cited_by_count:desc&mailto=${MAILTO}`;
+  const url = `${OA_BASE}/works?search=${encodeURIComponent(topic)}&filter=type:article&select=${fields}&per_page=${limit}&sort=cited_by_count:desc&mailto=${MAILTO}${openAlexAuth()}`;
   try {
     const res = await fetchWithTimeout(url);
     if (!res.ok) return [];
@@ -72,7 +73,7 @@ async function harvestOAPapers(topic, limit = 60) {
 // ── 2. OpenAlex: top books by citations ─────────────────────────────────────
 async function harvestOABooks(topic, limit = 30) {
   const fields = 'title,authorships,publication_year,cited_by_count,fwci,type,open_access,primary_location,doi';
-  const url = `${OA_BASE}/works?search=${encodeURIComponent(topic)}&filter=type:book&select=${fields}&per_page=${limit}&sort=cited_by_count:desc&mailto=${MAILTO}`;
+  const url = `${OA_BASE}/works?search=${encodeURIComponent(topic)}&filter=type:book&select=${fields}&per_page=${limit}&sort=cited_by_count:desc&mailto=${MAILTO}${openAlexAuth()}`;
   try {
     const res = await fetchWithTimeout(url);
     if (!res.ok) return [];
@@ -87,7 +88,7 @@ async function harvestOABooks(topic, limit = 30) {
 async function harvestOARecent(topic, limit = 20) {
   const fields = 'title,authorships,publication_year,cited_by_count,fwci,type,open_access,primary_location,doi';
   const year = new Date().getFullYear() - 15;
-  const url = `${OA_BASE}/works?search=${encodeURIComponent(topic)}&filter=publication_year:>${year}&select=${fields}&per_page=${limit}&sort=cited_by_count:desc&mailto=${MAILTO}`;
+  const url = `${OA_BASE}/works?search=${encodeURIComponent(topic)}&filter=publication_year:>${year}&select=${fields}&per_page=${limit}&sort=cited_by_count:desc&mailto=${MAILTO}${openAlexAuth()}`;
   try {
     const res = await fetchWithTimeout(url);
     if (!res.ok) return [];

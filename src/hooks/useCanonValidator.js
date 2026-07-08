@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { openAlexAuth } from '../utils/openAlexAuth';
 
 const OA_BASE = 'https://api.openalex.org';
 const OA_FIELDS = [
@@ -8,7 +9,7 @@ const OA_FIELDS = [
 ].join(',');
 
 async function openAlexSearch(query, limit = 25) {
-  const url = `${OA_BASE}/works?search=${encodeURIComponent(query)}&select=${OA_FIELDS}&per_page=${limit}&sort=cited_by_count:desc&mailto=canon-app`;
+  const url = `${OA_BASE}/works?search=${encodeURIComponent(query)}&select=${OA_FIELDS}&per_page=${limit}&sort=cited_by_count:desc&mailto=canon-app${openAlexAuth()}`;
   const res = await fetch(url);
   if (!res.ok) return [];
   const data = await res.json();

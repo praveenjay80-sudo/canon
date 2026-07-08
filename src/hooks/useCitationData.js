@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { openAlexAuth } from '../utils/openAlexAuth';
 
 const OA_BASE = 'https://api.openalex.org';
 const OA_FIELDS = 'title,authorships,publication_year,cited_by_count,fwci,type,open_access,cited_by_percentile_year,primary_location';
@@ -14,7 +15,7 @@ function titlesOverlap(a, b) {
 
 async function fetchCitation(title, author, year) {
   const query = [title, author].filter(Boolean).join(' ');
-  const url = `${OA_BASE}/works?search=${encodeURIComponent(query)}&select=${OA_FIELDS}&per_page=5&mailto=canon-app`;
+  const url = `${OA_BASE}/works?search=${encodeURIComponent(query)}&select=${OA_FIELDS}&per_page=5&mailto=canon-app${openAlexAuth()}`;
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
