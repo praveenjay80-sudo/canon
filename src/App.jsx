@@ -298,7 +298,7 @@ export default function App() {
             <header className="mb-10">
               <h1 className="text-6xl font-bold tracking-tight text-stone-900">Multipath</h1>
               <p className="mt-2 text-base text-stone-500 max-w-2xl leading-relaxed">
-                From any question to a complete scholarly roadmap — reading lists, curricula, prerequisites, dissertations, concept maps, and frontier inquiries across 65,026 academic concepts.
+                From any question to a complete scholarly roadmap — reading lists, curricula, prerequisites, dissertations, prerequisite/postrequisite maps, canon drift over time, cross-disciplinary synthesis, frontier open questions, transdisciplinary real-life answers, live citation data, field intelligence, and a 2,575-concept map, across 12 modes.
               </p>
 
               {/* App mode toggle */}
@@ -307,8 +307,8 @@ export default function App() {
                   onClick={() => setAppMode('canon')}
                   className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'canon'
-                      ? 'border-b-2 border-stone-900 text-stone-900 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                      ? 'border-b-2 border-blue-600 text-blue-700 font-semibold'
+                      : 'border-b-2 border-transparent text-blue-500 hover:text-blue-700'
                   }`}
                 >
                   Generate Canon
@@ -318,7 +318,7 @@ export default function App() {
                   className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'reverse'
                       ? 'border-b-2 border-violet-600 text-violet-700 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-violet-600'
+                      : 'border-b-2 border-transparent text-violet-500 hover:text-violet-700'
                   }`}
                 >
                   Pre &amp; Post Requisites
@@ -328,7 +328,7 @@ export default function App() {
                   className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'curriculum'
                       ? 'border-b-2 border-sky-600 text-sky-700 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-sky-600'
+                      : 'border-b-2 border-transparent text-sky-500 hover:text-sky-700'
                   }`}
                 >
                   Curriculum
@@ -338,7 +338,7 @@ export default function App() {
                   className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'dissertation'
                       ? 'border-b-2 border-indigo-600 text-indigo-700 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-indigo-600'
+                      : 'border-b-2 border-transparent text-indigo-500 hover:text-indigo-700'
                   }`}
                 >
                   Dissertation
@@ -348,7 +348,7 @@ export default function App() {
                   className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'drift'
                       ? 'border-b-2 border-amber-500 text-amber-700 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-amber-600'
+                      : 'border-b-2 border-transparent text-amber-500 hover:text-amber-700'
                   }`}
                 >
                   Canon Drift
@@ -358,7 +358,7 @@ export default function App() {
                   className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'consilience'
                       ? 'border-b-2 border-teal-600 text-teal-700 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-teal-600'
+                      : 'border-b-2 border-transparent text-teal-500 hover:text-teal-700'
                   }`}
                 >
                   Consilience
@@ -368,7 +368,7 @@ export default function App() {
                   className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'inquiry'
                       ? 'border-b-2 border-rose-600 text-rose-700 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-rose-600'
+                      : 'border-b-2 border-transparent text-rose-500 hover:text-rose-700'
                   }`}
                 >
                   The Inquiry
@@ -378,7 +378,7 @@ export default function App() {
                   className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'spectrum'
                       ? 'border-b-2 border-cyan-600 text-cyan-700 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-cyan-600'
+                      : 'border-b-2 border-transparent text-cyan-600 hover:text-cyan-700'
                   }`}
                 >
                   Spectrum
@@ -388,7 +388,7 @@ export default function App() {
                   className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'pulse'
                       ? 'border-b-2 border-lime-600 text-lime-700 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-lime-600'
+                      : 'border-b-2 border-transparent text-lime-600 hover:text-lime-800'
                   }`}
                 >
                   Pulse
@@ -409,8 +409,8 @@ export default function App() {
                   onClick={() => setAppMode('concepts')}
                   className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
                     appMode === 'concepts'
-                      ? 'border-b-2 border-stone-800 text-stone-900 font-semibold'
-                      : 'border-b-2 border-transparent text-stone-400 hover:text-stone-700'
+                      ? 'border-b-2 border-fuchsia-600 text-fuchsia-700 font-semibold'
+                      : 'border-b-2 border-transparent text-fuchsia-500 hover:text-fuchsia-700'
                   }`}
                 >
                   Concept Map
@@ -436,7 +436,7 @@ export default function App() {
                   : appMode === 'spectrum'
                   ? 'Enter a topic and get real-life questions whose complete answer genuinely spans multiple disciplines — or type your own. Get a plain-language concept breakdown and a staged reading list grounded in real literature.'
                   : appMode === 'pulse'
-                  ? 'Pick a field, subfield, and topic — see live citation counts, citation velocity, syllabus assignment, and Google Scholar results right now. No AI, just the raw numbers from OpenAlex, Semantic Scholar, Open Syllabus, and Google Scholar.'
+                  ? 'Pick a field, subfield, and topic — see live citation counts, citation velocity, influential papers, and Google Scholar results right now. No AI, just the raw numbers from OpenAlex, Semantic Scholar, and Google Scholar.'
                   : appMode === 'intelligence'
                   ? 'Map any field\'s complete intellectual landscape — all schools of thought, key interlocutors, and the central argument structure. Then audit its hidden assumptions and paradigm status.'
                   : appMode === 'knowledge'
@@ -1000,10 +1000,11 @@ export default function App() {
                 topicName={pulse.topicName}
                 mostCited={pulse.mostCited}
                 rising={pulse.rising}
-                mostAssigned={pulse.mostAssigned}
                 mostInfluential={pulse.mostInfluential}
                 scholar={pulse.scholar}
+                scholarLoading={pulse.scholarLoading}
                 hasScholarKey={pulse.hasScholarKey}
+                onScholarKeySaved={pulse.refreshScholar}
               />
             )}
             {appMode === 'pulse' && pulse.phase === 'complete' && (

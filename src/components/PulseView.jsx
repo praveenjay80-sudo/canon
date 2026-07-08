@@ -1,14 +1,65 @@
+import { useState } from 'react';
 import { recentCitationVelocity } from '../utils/pulseOpenAlex';
 
-function Panel({ title, subtitle, items, renderMetric, renderLink, emptyText }) {
+function ScholarKeyPrompt({ onSaved }) {
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    const v = draft.trim();
+    if (!v) return;
+    localStorage.setItem('canon_serp_key', v);
+    setSaving(true);
+    await onSaved();
+    setSaving(false);
+  }
+
+  return (
+    <div className="px-5 py-6">
+      <p className="text-sm text-stone-500 mb-3">Add a SerpAPI key to see Google Scholar results for this topic.</p>
+      <div className="flex gap-2">
+        <input
+          type="password"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && save()}
+          placeholder="serpapi key..."
+          className="flex-1 px-3 py-2 text-sm border border-stone-200 bg-white text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-700 transition-colors font-mono"
+        />
+        <button
+          onClick={save}
+          disabled={!draft.trim() || saving}
+          className="px-4 py-2 text-xs bg-stone-900 text-white hover:bg-stone-700 transition-colors disabled:opacity-40 whitespace-nowrap"
+        >
+          {saving ? 'Loading...' : 'Save & Load'}
+        </button>
+      </div>
+      <p className="text-xs text-stone-300 mt-2">
+        Stored in this browser only. Get one at{' '}
+        <a href="https://serpapi.com/manage-api-key" target="_blank" rel="noreferrer" className="underline hover:text-stone-500">
+          serpapi.com
+        </a>.
+      </p>
+    </div>
+  );
+}
+
+function Panel({ title, subtitle, items, renderMetric, renderLink, emptyText, emptyContent, loading }) {
   return (
     <div className="border border-stone-200 bg-white">
       <div className="px-5 py-3 border-b border-stone-200">
         <h3 className="text-sm font-semibold text-stone-900">{title}</h3>
         {subtitle && <p className="text-xs text-stone-400 mt-0.5">{subtitle}</p>}
       </div>
-      {items.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-stone-400">{emptyText || 'No data found.'}</p>
+      {loading ? (
+        <div className="px-5 py-6 flex items-center gap-2.5 text-stone-400">
+          <span className="flex gap-0.5">
+            <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+          </span>
+          <span className="text-sm">Loading...</span>
+        </div>
+      ) : items.length === 0 ? (
+        emptyContent || <p className="px-5 py-6 text-sm text-stone-400">{emptyText || 'No data found.'}</p>
       ) : (
         <div className="divide-y divide-stone-100">
           {items.map((item, i) => {
@@ -40,7 +91,9 @@ function Panel({ title, subtitle, items, renderMetric, renderLink, emptyText }) 
   );
 }
 
-export default function PulseView({ topicName, mostCited, rising, mostAssigned, mostInfluential, scholar, hasScholarKey }) {
+export default function PulseView({
+  topicName, mostCited, rising, mostInfluential, scholar, scholarLoading, hasScholarKey, onScholarKeySaved,
+}) {
   const asOf = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
   return (
@@ -74,18 +127,14 @@ export default function PulseView({ topicName, mostCited, rising, mostAssigned, 
           emptyText="No Semantic Scholar match for these works yet."
         />
         <Panel
-          title="Most Assigned"
-          subtitle="Open Syllabus Project, text-matched to this topic name — approximate, not ID-filtered"
-          items={mostAssigned}
-          renderMetric={w => `${(w.syllabusCount || 0).toLocaleString()} courses`}
-        />
-        <Panel
           title="Google Scholar"
           subtitle="Text-matched to this topic name — approximate, not ID-filtered"
           items={scholar}
+          loading={scholarLoading}
           renderMetric={w => `${w.citationCount.toLocaleString()} cit.`}
           renderLink={w => w.link || null}
-          emptyText={hasScholarKey ? 'No Google Scholar results found.' : 'Add a SerpAPI key in Settings above to see Google Scholar results.'}
+          emptyText="No Google Scholar results found."
+          emptyContent={!hasScholarKey ? <ScholarKeyPrompt onSaved={onScholarKeySaved} /> : undefined}
         />
       </div>
     </div>

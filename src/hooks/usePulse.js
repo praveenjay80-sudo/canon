@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
 import { fetchTopicWorks, recentCitationVelocity } from '../utils/pulseOpenAlex';
-import { syllabusSearch } from '../utils/syllabusHarvest';
 
 async function serpScholarSearch(query, apiKey, limit = 20) {
   const url = `https://serpapi.com/search.json?engine=google_scholar&q=${encodeURIComponent(query)}&api_key=${apiKey}&num=${limit}`;
@@ -60,9 +59,9 @@ export function usePulse() {
   const [topicName, setTopicName] = useState('');
   const [mostCited, setMostCited] = useState([]);
   const [rising, setRising] = useState([]);
-  const [mostAssigned, setMostAssigned] = useState([]);
   const [mostInfluential, setMostInfluential] = useState([]);
   const [scholar, setScholar] = useState([]);
+  const [scholarLoading, setScholarLoading] = useState(false);
   const cancelRef = useRef({ aborted: false });
 
   const hasScholarKey = !!localStorage.getItem('canon_serp_key');
@@ -77,23 +76,20 @@ export function usePulse() {
     setTopicName(name);
     setMostCited([]);
     setRising([]);
-    setMostAssigned([]);
     setMostInfluential([]);
     setScholar([]);
 
     const serpKey = localStorage.getItem('canon_serp_key') || '';
 
     try {
-      const [works, ospResults, scholarResults] = await Promise.all([
+      const [works, scholarResults] = await Promise.all([
         fetchTopicWorks(topicId, 30),
-        syllabusSearch(name, 30).catch(() => []),
         serpKey ? serpScholarSearch(name, serpKey, 20) : Promise.resolve([]),
       ]);
       if (token.aborted) return;
 
       setMostCited(works);
       setRising([...works].sort((a, b) => recentCitationVelocity(b) - recentCitationVelocity(a)));
-      setMostAssigned([...ospResults].sort((a, b) => (b.syllabusCount || 0) - (a.syllabusCount || 0)));
       setScholar(scholarResults);
 
       const dois = works.map(w => w.doi).filter(Boolean).slice(0, 30);
@@ -110,6 +106,17 @@ export function usePulse() {
     }
   }, []);
 
+  // Re-fetches only the Scholar panel — used right after a SerpAPI key is saved
+  // from Pulse's own inline prompt, without re-running the OpenAlex/S2 calls.
+  const refreshScholar = useCallback(async () => {
+    const serpKey = localStorage.getItem('canon_serp_key') || '';
+    if (!serpKey || !topicName) return;
+    setScholarLoading(true);
+    const results = await serpScholarSearch(topicName, serpKey, 20);
+    setScholar(results);
+    setScholarLoading(false);
+  }, [topicName]);
+
   const reset = useCallback(() => {
     cancelRef.current.aborted = true;
     setPhase('idle');
@@ -117,13 +124,12 @@ export function usePulse() {
     setTopicName('');
     setMostCited([]);
     setRising([]);
-    setMostAssigned([]);
     setMostInfluential([]);
     setScholar([]);
   }, []);
 
   return {
-    phase, error, topicName, mostCited, rising, mostAssigned, mostInfluential, scholar,
-    hasScholarKey, select, reset,
+    phase, error, topicName, mostCited, rising, mostInfluential, scholar, scholarLoading,
+    hasScholarKey, select, reset, refreshScholar,
   };
 }
