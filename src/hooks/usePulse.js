@@ -56,6 +56,93 @@ List only the numbers of works that are genuinely, substantively about this topi
   }
 }
 
+// A pedagogical reading sequence for the Works panel's optional "Reading Order"
+// view — where a learner would naturally encounter each work, not how highly
+// cited it is. Exported so PulseView can render group headers in this exact
+// order without duplicating the list.
+export const READING_STAGES = [
+  'Historical Context & Intuition',
+  'Foundational Textbooks',
+  'Mathematical Rigor',
+  'Advanced Concepts',
+  'Specialized Topics',
+  'Philosophical Frameworks',
+];
+
+// One-line definitions so classification is consistent rather than guessed
+// from the stage name alone — without these, "Advanced Concepts" vs.
+// "Specialized Topics" vs. "Mathematical Rigor" is ambiguous even to a human.
+const STAGE_DEFINITIONS = {
+  'Historical Context & Intuition': 'explains the motivating problem, origin story, or builds physical/conceptual intuition before the formalism',
+  'Foundational Textbooks': 'a standard textbook or expository work establishing the core definitions and baseline theory',
+  'Mathematical Rigor': 'focused on precise, formal derivations or proofs that establish the theory rigorously',
+  'Advanced Concepts': 'extends the core theory into more advanced or technically demanding territory',
+  'Specialized Topics': 'a narrow application, subtopic, or niche extension within the field',
+  'Philosophical Frameworks': 'addresses foundational, interpretive, or meta-level questions about the theory itself',
+};
+
+function normalizeStageName(s) {
+  return s.toLowerCase().replace(/[^a-z0-9\s&]/g, '').trim();
+}
+
+// None of these six stages are derivable from OpenAlex's numeric metadata
+// (citations, FWCI, type, venue) — placing a specific work requires judging
+// what it's actually about, which needs Claude. Unlike claudeValidateWorks,
+// this only runs when the user explicitly switches to the Reading Order view
+// (never on the default load), so Pulse's data stays AI-free by default.
+async function classifyWorksByStage(topicName, works) {
+  const apiKey = resolveApiKey();
+  if (!apiKey || !works.length) return null;
+
+  const list = works.map((w, i) => `${i}. ${w.title}${w.authors ? ` — ${w.authors}` : ''}${w.year ? ` (${w.year})` : ''}`).join('\n');
+  const stageList = READING_STAGES.map(s => `${s} (${STAGE_DEFINITIONS[s]})`).join('\n');
+  const system = `You place academic works into the stage where a learner would naturally encounter them while working through a topic, in this fixed pedagogical order:\n${stageList}\n\nAssign each work to exactly one stage — the single best fit, not every stage it could arguably touch.`;
+  const user = `Topic: "${topicName}"
+
+Works:
+${list}
+
+For every work number, output one line in exactly this format:
+<number>: <stage name>
+
+Use only these exact stage names, spelled exactly as given: ${READING_STAGES.join(' / ')}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 800,
+        system,
+        messages: [{ role: 'user', content: user }],
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const text = (data.content?.[0]?.text || '').trim();
+    // Match tolerant of case/punctuation drift (e.g. "foundational textbooks."),
+    // but still requires the full normalized name — no fuzzy/partial credit.
+    const byNormalized = new Map(READING_STAGES.map(s => [normalizeStageName(s), s]));
+    const map = {};
+    for (const line of text.split('\n')) {
+      const m = line.match(/^\s*(\d+)\s*:\s*(.+?)\s*$/);
+      if (!m) continue;
+      const idx = parseInt(m[1], 10);
+      const stage = byNormalized.get(normalizeStageName(m[2]));
+      if (!Number.isNaN(idx) && stage) map[idx] = stage;
+    }
+    return Object.keys(map).length ? map : null;
+  } catch {
+    return null;
+  }
+}
+
 // Google Scholar has no public API, and SerpAPI (the paid proxy for it) does not
 // send CORS headers and shouldn't have its key exposed client-side anyway — so
 // this must go through the canon-enrichment Cloudflare Worker's /scholar-search
@@ -125,6 +212,9 @@ export function usePulse() {
   const [scholar, setScholar] = useState([]);
   const [scholarFailed, setScholarFailed] = useState(false);
   const [scholarLoading, setScholarLoading] = useState(false);
+  const [readingStages, setReadingStages] = useState(null);
+  const [readingStagesLoading, setReadingStagesLoading] = useState(false);
+  const [readingStagesFailed, setReadingStagesFailed] = useState(false);
   const cancelRef = useRef({ aborted: false });
 
   const hasScholarKey = !!localStorage.getItem('canon_serp_key');
@@ -143,6 +233,8 @@ export function usePulse() {
     setScholar([]);
     setScholarFailed(false);
     setWasClaudeValidated(false);
+    setReadingStages(null);
+    setReadingStagesFailed(false);
 
     const serpKey = localStorage.getItem('canon_serp_key') || '';
 
@@ -211,6 +303,19 @@ export function usePulse() {
     setScholarLoading(false);
   }, [topicName]);
 
+  // Only called when the user explicitly switches the Works panel to the
+  // Reading Order view — cached per topic (readingStages stays null until
+  // then) so picking a topic never runs this by default.
+  const loadReadingStages = useCallback(async () => {
+    if (readingStages || readingStagesLoading || !mostCited.length) return;
+    setReadingStagesLoading(true);
+    setReadingStagesFailed(false);
+    const map = await classifyWorksByStage(topicName, mostCited);
+    if (map) setReadingStages(map);
+    else setReadingStagesFailed(true);
+    setReadingStagesLoading(false);
+  }, [topicName, mostCited, readingStages, readingStagesLoading]);
+
   const reset = useCallback(() => {
     cancelRef.current.aborted = true;
     setPhase('idle');
@@ -223,10 +328,13 @@ export function usePulse() {
     setMostInfluential([]);
     setScholar([]);
     setScholarFailed(false);
+    setReadingStages(null);
+    setReadingStagesFailed(false);
   }, []);
 
   return {
     phase, error, topicName, isTextMatch, wasClaudeValidated, mostCited, topAuthors, mostInfluential, scholar, scholarFailed, scholarLoading,
+    readingStages, readingStagesLoading, readingStagesFailed, loadReadingStages,
     hasScholarKey, select, reset, refreshScholar,
   };
 }

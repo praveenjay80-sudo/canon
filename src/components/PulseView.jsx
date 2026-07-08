@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { recentCitationVelocity } from '../utils/pulseOpenAlex';
+import { READING_STAGES } from '../hooks/usePulse';
 
 function ScholarKeyPrompt({ onSaved }) {
   const hasSavedKey = !!localStorage.getItem('canon_serp_key');
@@ -172,7 +173,34 @@ function SortSelect({ value, onChange, options }) {
   );
 }
 
-function Panel({ title, subtitle, items, renderMetric, renderLink, renderSecondary, renderBadges, emptyText, emptyContent, loading, headerRight }) {
+function ItemRow({ item, renderMetric, renderLink, renderSecondary, renderBadges }) {
+  const link = renderLink ? renderLink(item) : null;
+  const titleEl = link ? (
+    <a href={link} target="_blank" rel="noreferrer" className="text-sm font-medium text-stone-800 hover:text-stone-950 hover:underline leading-snug">
+      {item.title}
+    </a>
+  ) : (
+    <p className="text-sm font-medium text-stone-800 leading-snug">{item.title}</p>
+  );
+  const secondary = renderSecondary
+    ? renderSecondary(item)
+    : `${item.authors || ''}${item.authors && item.year ? ' · ' : ''}${item.year || ''}`;
+  const badges = renderBadges ? renderBadges(item) : null;
+  return (
+    <div className="py-3 border-b border-stone-100 last:border-0 flex items-start justify-between gap-4">
+      <div className="min-w-0 flex-1">
+        {titleEl}
+        {secondary && <p className="text-xs text-stone-400 mt-0.5">{secondary}</p>}
+        {badges && <div className="flex flex-wrap items-center gap-1.5 mt-1.5">{badges}</div>}
+      </div>
+      <div className="shrink-0 text-xs font-mono text-stone-500 whitespace-nowrap pt-0.5">
+        {renderMetric(item)}
+      </div>
+    </div>
+  );
+}
+
+function Panel({ title, subtitle, items, renderMetric, renderLink, renderSecondary, renderBadges, emptyText, emptyContent, loading, headerRight, children }) {
   return (
     <div className="border border-stone-200 bg-white">
       <div className="px-5 py-3 border-b border-stone-200 flex items-start justify-between gap-3">
@@ -182,7 +210,9 @@ function Panel({ title, subtitle, items, renderMetric, renderLink, renderSeconda
         </div>
         {headerRight && <div className="shrink-0">{headerRight}</div>}
       </div>
-      {loading ? (
+      {children ? (
+        <div className="px-5">{children}</div>
+      ) : loading ? (
         <div className="px-5 py-6 flex items-center gap-2.5 text-stone-400">
           <span className="flex gap-0.5">
             <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
@@ -193,32 +223,9 @@ function Panel({ title, subtitle, items, renderMetric, renderLink, renderSeconda
         emptyContent || <p className="px-5 py-6 text-sm text-stone-400">{emptyText || 'No data found.'}</p>
       ) : (
         <div className="px-5">
-          {items.map((item, i) => {
-            const link = renderLink ? renderLink(item) : null;
-            const titleEl = link ? (
-              <a href={link} target="_blank" rel="noreferrer" className="text-sm font-medium text-stone-800 hover:text-stone-950 hover:underline leading-snug">
-                {item.title}
-              </a>
-            ) : (
-              <p className="text-sm font-medium text-stone-800 leading-snug">{item.title}</p>
-            );
-            const secondary = renderSecondary
-              ? renderSecondary(item)
-              : `${item.authors || ''}${item.authors && item.year ? ' · ' : ''}${item.year || ''}`;
-            const badges = renderBadges ? renderBadges(item) : null;
-            return (
-              <div key={i} className="py-3 border-b border-stone-100 last:border-0 flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  {titleEl}
-                  {secondary && <p className="text-xs text-stone-400 mt-0.5">{secondary}</p>}
-                  {badges && <div className="flex flex-wrap items-center gap-1.5 mt-1.5">{badges}</div>}
-                </div>
-                <div className="shrink-0 text-xs font-mono text-stone-500 whitespace-nowrap pt-0.5">
-                  {renderMetric(item)}
-                </div>
-              </div>
-            );
-          })}
+          {items.map((item, i) => (
+            <ItemRow key={i} item={item} renderMetric={renderMetric} renderLink={renderLink} renderSecondary={renderSecondary} renderBadges={renderBadges} />
+          ))}
         </div>
       )}
     </div>
@@ -232,12 +239,37 @@ function worksSubtitle(isTextMatch, wasClaudeValidated) {
     : 'OpenAlex — text-matched to this Claude-suggested topic, not ID-filtered';
 }
 
+function ViewToggle({ mode, onChange }) {
+  const base = 'px-2 py-1 text-[11px] border transition-colors';
+  return (
+    <div className="flex">
+      <button
+        type="button"
+        onClick={() => onChange('ranked')}
+        className={`${base} border-stone-200 ${mode === 'ranked' ? 'bg-stone-900 text-white border-stone-900' : 'bg-white text-stone-500 hover:bg-stone-50'}`}
+      >
+        Ranked
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('stages')}
+        className={`${base} border-l-0 ${mode === 'stages' ? 'bg-violet-700 text-white border-violet-700' : 'bg-white text-violet-600 border-stone-200 hover:bg-violet-50'}`}
+        title="Groups works into a pedagogical reading sequence — classified by Claude, not by any citation metric"
+      >
+        ✨ Reading Order
+      </button>
+    </div>
+  );
+}
+
 export default function PulseView({
   topicName, isTextMatch, wasClaudeValidated, mostCited, topAuthors, mostInfluential, scholar, scholarLoading, scholarFailed, onScholarKeySaved,
+  readingStages, readingStagesLoading, readingStagesFailed, onLoadReadingStages,
 }) {
   const asOf = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   const [workSort, setWorkSort] = useState('citations');
   const [authorSort, setAuthorSort] = useState('citations');
+  const [worksView, setWorksView] = useState('ranked');
 
   const influentialDois = useMemo(
     () => new Set((mostInfluential || []).map(p => p.doi).filter(Boolean)),
@@ -245,7 +277,7 @@ export default function PulseView({
   );
   const sortedWorks = useMemo(
     () => mostCited
-      .map(w => ({ ...w, crossVerified: !!(w.doi && influentialDois.has(w.doi)) }))
+      .map((w, i) => ({ ...w, originalIndex: i, crossVerified: !!(w.doi && influentialDois.has(w.doi)) }))
       .sort(WORK_SORTS[workSort].compare),
     [mostCited, workSort, influentialDois]
   );
@@ -253,11 +285,27 @@ export default function PulseView({
     () => (topAuthors || []).map(a => ({ ...a, title: a.name })).sort(AUTHOR_SORTS[authorSort].compare),
     [topAuthors, authorSort]
   );
+  const stageGroups = useMemo(() => {
+    if (!readingStages) return null;
+    const groups = new Map(READING_STAGES.map(s => [s, []]));
+    const unclassified = [];
+    for (const w of sortedWorks) {
+      const stage = readingStages[w.originalIndex];
+      if (stage && groups.has(stage)) groups.get(stage).push(w);
+      else unclassified.push(w);
+    }
+    return { groups, unclassified };
+  }, [sortedWorks, readingStages]);
+
+  function handleWorksViewChange(mode) {
+    setWorksView(mode);
+    if (mode === 'stages' && !readingStages && !readingStagesLoading) onLoadReadingStages();
+  }
 
   return (
     <div className="mt-10">
       <div className="mb-6">
-        <p className="text-xs font-mono text-stone-400 mb-1">Pulse · live, not generated · as of {asOf}</p>
+        <p className="text-xs font-mono text-stone-400 mb-1">Master Reading List · live, not generated · as of {asOf}</p>
         <h2 className="text-xl font-semibold text-stone-900 tracking-tight leading-snug">{topicName}</h2>
         <div className="mt-4 h-px bg-stone-200" />
       </div>
@@ -266,14 +314,56 @@ export default function PulseView({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Panel
             title="Most Cited Works"
-            subtitle={worksSubtitle(isTextMatch, wasClaudeValidated)}
+            subtitle={worksView === 'stages'
+              ? 'Grouped into a Claude-classified pedagogical sequence — the numbers below are still real, only the grouping is AI-assigned'
+              : worksSubtitle(isTextMatch, wasClaudeValidated)}
             items={sortedWorks}
             renderMetric={WORK_SORTS[workSort].metric}
             renderLink={w => w.oaUrl || (w.doi ? w.doi : null)}
             renderBadges={workBadges}
-            headerRight={<SortSelect value={workSort} onChange={setWorkSort} options={WORK_SORTS} />}
             emptyText={wasClaudeValidated ? "OpenAlex found text matches, but Claude didn't judge any of them to be genuinely about this topic." : undefined}
-          />
+            headerRight={
+              <div className="flex items-center gap-2">
+                <ViewToggle mode={worksView} onChange={handleWorksViewChange} />
+                {worksView === 'ranked' && <SortSelect value={workSort} onChange={setWorkSort} options={WORK_SORTS} />}
+              </div>
+            }
+          >
+            {worksView === 'stages' && (
+              readingStagesLoading ? (
+                <div className="py-6 flex items-center gap-2.5 text-stone-400">
+                  <span className="flex gap-0.5">
+                    <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                  </span>
+                  <span className="text-sm">Claude is placing each work in the reading sequence...</span>
+                </div>
+              ) : readingStagesFailed ? (
+                <div className="py-6">
+                  <p className="text-sm text-stone-400 mb-2">Couldn't classify these works right now.</p>
+                  <button onClick={onLoadReadingStages} className="text-xs text-violet-600 hover:underline">Try again</button>
+                </div>
+              ) : stageGroups ? (
+                <>
+                  {READING_STAGES.filter(s => stageGroups.groups.get(s).length > 0).map(stage => (
+                    <div key={stage} className="pt-4 first:pt-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600 mb-1">{stage}</p>
+                      {stageGroups.groups.get(stage).map((item, i) => (
+                        <ItemRow key={i} item={item} renderMetric={WORK_SORTS.citations.metric} renderLink={w => w.oaUrl || (w.doi ? w.doi : null)} renderBadges={workBadges} />
+                      ))}
+                    </div>
+                  ))}
+                  {stageGroups.unclassified.length > 0 && (
+                    <div className="pt-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-400 mb-1">Unclassified</p>
+                      {stageGroups.unclassified.map((item, i) => (
+                        <ItemRow key={i} item={item} renderMetric={WORK_SORTS.citations.metric} renderLink={w => w.oaUrl || (w.doi ? w.doi : null)} renderBadges={workBadges} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : null
+            )}
+          </Panel>
           <Panel
             title="Most Cited Researchers"
             subtitle="Aggregated across the works above — every listed coauthor is credited the work's citations"

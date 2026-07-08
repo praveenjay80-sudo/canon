@@ -391,7 +391,7 @@ export default function App() {
                       : 'border-b-2 border-transparent text-lime-600 hover:text-lime-800'
                   }`}
                 >
-                  Pulse
+                  Master Reading List
                 </button>
 
                 <button
@@ -1007,6 +1007,10 @@ export default function App() {
                 scholarLoading={pulse.scholarLoading}
                 scholarFailed={pulse.scholarFailed}
                 onScholarKeySaved={pulse.refreshScholar}
+                readingStages={pulse.readingStages}
+                readingStagesLoading={pulse.readingStagesLoading}
+                readingStagesFailed={pulse.readingStagesFailed}
+                onLoadReadingStages={pulse.loadReadingStages}
               />
             )}
             {appMode === 'pulse' && pulse.phase === 'complete' && (
