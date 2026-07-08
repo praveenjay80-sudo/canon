@@ -37,7 +37,11 @@ async function fetchInfluentialByDoi(dois) {
     );
     if (!res.ok) return [];
     const json = await res.json();
+    // Semantic Scholar's batch response preserves input order (null for
+    // unmatched), so zip the original doi back in by index — needed to cross-
+    // reference these against the Works panel for the "cross-verified" badge.
     return (json || [])
+      .map((p, i) => (p ? { ...p, doi: dois[i] } : null))
       .filter(Boolean)
       .map(p => ({
         title: p.title,
@@ -45,6 +49,7 @@ async function fetchInfluentialByDoi(dois) {
         year: p.year,
         citationCount: p.citationCount || 0,
         influentialCitationCount: p.influentialCitationCount || 0,
+        doi: p.doi,
       }))
       .filter(p => p.influentialCitationCount > 0)
       .sort((a, b) => b.influentialCitationCount - a.influentialCitationCount);
@@ -70,7 +75,7 @@ export function usePulse() {
 
   const hasScholarKey = !!localStorage.getItem('canon_serp_key');
 
-  const select = useCallback(async (topicId, name) => {
+  const select = useCallback(async (topicId, name, subfieldId) => {
     cancelRef.current.aborted = true;
     const token = { aborted: false };
     cancelRef.current = token;
@@ -89,7 +94,7 @@ export function usePulse() {
 
     try {
       const [works, scholarOutcome] = await Promise.all([
-        topicId ? fetchTopicWorks(topicId, 30) : fetchTopicWorksByText(name, 30),
+        topicId ? fetchTopicWorks(topicId, 30) : fetchTopicWorksByText(name, 30, subfieldId),
         serpScholarSearch(name, serpKey, 20),
       ]);
       if (token.aborted) return;

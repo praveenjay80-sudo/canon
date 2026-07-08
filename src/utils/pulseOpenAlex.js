@@ -137,17 +137,23 @@ function booleanAndQuery(topicName) {
 
 // For topics that don't come from the OpenAlex taxonomy (e.g. a Claude-suggested
 // topic name) — falls back to full-text search instead of an exact topics.id
-// filter, since there's no id to filter on.
-export async function fetchTopicWorksByText(topicName, limit = 30) {
+// filter, since there's no id to filter on. subfieldId (from the same cascading
+// dropdown the topic name came from) constrains matches to OpenAlex's own
+// subfield classification — without it, word-overlap alone lets works from an
+// unrelated subfield through (e.g. "Topological Quantum Field Theory" pulling
+// in chemoinformatics papers that separately use "topological" and "quantum").
+export async function fetchTopicWorksByText(topicName, limit = 30, subfieldId = null) {
   const fetchLimit = Math.min(limit * 3, 100);
   const andQuery = booleanAndQuery(topicName);
+  const subfieldFilter = subfieldId ? `,topics.subfield.id:${encodeURIComponent(bareId(subfieldId))}` : '';
 
-  const strictUrl = `https://api.openalex.org/works?search=${encodeURIComponent(andQuery)}&filter=type:article|book&select=${WORK_SELECT}&sort=cited_by_count:desc&per_page=${fetchLimit}&${MAILTO}${openAlexAuth()}`;
+  const strictUrl = `https://api.openalex.org/works?search=${encodeURIComponent(andQuery)}&filter=type:article|book${subfieldFilter}&select=${WORK_SELECT}&sort=cited_by_count:desc&per_page=${fetchLimit}&${MAILTO}${openAlexAuth()}`;
   const strict = await runWorksQuery(strictUrl, limit);
   if (strict.length >= 5 || andQuery === topicName) return strict;
 
   // Requiring every word was too strict for this phrasing (near-empty result) —
-  // fall back to a relevance-ranked loose search rather than showing nothing.
-  const looseUrl = `https://api.openalex.org/works?search=${encodeURIComponent(topicName)}&filter=type:article|book&select=${WORK_SELECT}&sort=relevance_score:desc&per_page=${fetchLimit}&${MAILTO}${openAlexAuth()}`;
+  // fall back to a relevance-ranked loose search, still subfield-constrained,
+  // rather than showing nothing.
+  const looseUrl = `https://api.openalex.org/works?search=${encodeURIComponent(topicName)}&filter=type:article|book${subfieldFilter}&select=${WORK_SELECT}&sort=relevance_score:desc&per_page=${fetchLimit}&${MAILTO}${openAlexAuth()}`;
   return runWorksQuery(looseUrl, limit);
 }

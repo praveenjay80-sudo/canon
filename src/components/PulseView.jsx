@@ -73,6 +73,13 @@ const TYPE_LABELS = { article: 'Paper', book: 'Book', 'book-chapter': 'Chapter',
 
 function workBadges(w) {
   const badges = [];
+  if (w.crossVerified) {
+    badges.push(
+      <span key="xv" className="inline-flex items-center gap-1 text-[10px] text-violet-700 border border-violet-200 bg-violet-50 px-1.5 py-0.5" title="Also ranks among Semantic Scholar's Most Influential Papers for this set — cited by later work in a way that builds on it, not just background citations">
+        ✓ Cross-verified
+      </span>
+    );
+  }
   if (w.fwci != null) badges.push(<FwciBadge key="fwci" fwci={w.fwci} />);
   if (w.percentile != null) {
     badges.push(
@@ -225,9 +232,15 @@ export default function PulseView({
   const [workSort, setWorkSort] = useState('citations');
   const [authorSort, setAuthorSort] = useState('citations');
 
+  const influentialDois = useMemo(
+    () => new Set((mostInfluential || []).map(p => p.doi).filter(Boolean)),
+    [mostInfluential]
+  );
   const sortedWorks = useMemo(
-    () => [...mostCited].sort(WORK_SORTS[workSort].compare),
-    [mostCited, workSort]
+    () => mostCited
+      .map(w => ({ ...w, crossVerified: !!(w.doi && influentialDois.has(w.doi)) }))
+      .sort(WORK_SORTS[workSort].compare),
+    [mostCited, workSort, influentialDois]
   );
   const sortedAuthors = useMemo(
     () => (topAuthors || []).map(a => ({ ...a, title: a.name })).sort(AUTHOR_SORTS[authorSort].compare),

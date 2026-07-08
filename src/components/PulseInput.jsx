@@ -37,8 +37,10 @@ export default function PulseInput({ onSelect, disabled }) {
     const t = topics.find(x => x.name === v);
     if (t && t.url) { onSelect(t.url, t.name); return; }
     // No OpenAlex id — this came from Claude's suggestion list, so Pulse falls
-    // back to a text search instead of an exact topics.id filter.
-    onSelect(null, v);
+    // back to a text search instead of an exact topics.id filter. Pass the
+    // subfield's own id along so that search stays constrained to it, instead
+    // of matching word-overlap across unrelated subfields.
+    onSelect(null, v, taxonomy?.subfieldUrls?.[subfield]);
   }
 
   const selectClass = "flex-1 px-3 py-2.5 text-sm border border-stone-200 bg-white text-stone-900 focus:outline-none focus:border-stone-700 transition-colors disabled:opacity-50 disabled:bg-stone-50";
