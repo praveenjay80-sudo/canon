@@ -72,11 +72,11 @@ function Panel({ title, subtitle, items, renderMetric, renderLink, emptyText, em
           {items.map((item, i) => {
             const link = renderLink ? renderLink(item) : null;
             const titleEl = link ? (
-              <a href={link} target="_blank" rel="noreferrer" className="text-xs font-medium text-stone-800 hover:text-stone-950 hover:underline line-clamp-2 leading-snug">
+              <a href={link} target="_blank" rel="noreferrer" className="text-xs font-medium text-stone-800 hover:text-stone-950 hover:underline leading-snug">
                 {item.title}
               </a>
             ) : (
-              <p className="text-xs font-medium text-stone-800 line-clamp-2 leading-snug">{item.title}</p>
+              <p className="text-xs font-medium text-stone-800 leading-snug">{item.title}</p>
             );
             return (
               <div key={i} className="py-2 border-b border-stone-100 flex items-start justify-between gap-2">
