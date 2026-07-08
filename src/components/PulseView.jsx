@@ -264,7 +264,7 @@ function ViewToggle({ mode, onChange }) {
 
 export default function PulseView({
   topicName, isTextMatch, wasClaudeValidated, mostCited, topAuthors, mostInfluential, scholar, scholarLoading, scholarFailed, onScholarKeySaved,
-  readingStages, readingStagesLoading, readingStagesFailed, onLoadReadingStages,
+  readingStageGroups, readingStagesUnclassified, readingStagesLoading, readingStagesFailed, onLoadReadingStages,
 }) {
   const asOf = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   const [workSort, setWorkSort] = useState('citations');
@@ -277,7 +277,7 @@ export default function PulseView({
   );
   const sortedWorks = useMemo(
     () => mostCited
-      .map((w, i) => ({ ...w, originalIndex: i, crossVerified: !!(w.doi && influentialDois.has(w.doi)) }))
+      .map(w => ({ ...w, crossVerified: !!(w.doi && influentialDois.has(w.doi)) }))
       .sort(WORK_SORTS[workSort].compare),
     [mostCited, workSort, influentialDois]
   );
@@ -285,21 +285,10 @@ export default function PulseView({
     () => (topAuthors || []).map(a => ({ ...a, title: a.name })).sort(AUTHOR_SORTS[authorSort].compare),
     [topAuthors, authorSort]
   );
-  const stageGroups = useMemo(() => {
-    if (!readingStages) return null;
-    const groups = new Map(READING_STAGES.map(s => [s, []]));
-    const unclassified = [];
-    for (const w of sortedWorks) {
-      const stage = readingStages[w.originalIndex];
-      if (stage && groups.has(stage)) groups.get(stage).push(w);
-      else unclassified.push(w);
-    }
-    return { groups, unclassified };
-  }, [sortedWorks, readingStages]);
 
   function handleWorksViewChange(mode) {
     setWorksView(mode);
-    if (mode === 'stages' && !readingStages && !readingStagesLoading) onLoadReadingStages();
+    if (mode === 'stages' && !readingStageGroups && !readingStagesLoading) onLoadReadingStages();
   }
 
   return (
@@ -342,15 +331,15 @@ export default function PulseView({
                   <p className="text-sm text-stone-400 mb-2">Couldn't classify these works right now.</p>
                   <button onClick={onLoadReadingStages} className="text-xs text-violet-600 hover:underline">Try again</button>
                 </div>
-              ) : stageGroups ? (
+              ) : readingStageGroups ? (
                 <>
                   {READING_STAGES.map(stage => {
-                    const stageWorks = stageGroups.groups.get(stage);
+                    const stageWorks = [...(readingStageGroups[stage] || [])].sort((a, b) => b.citationCount - a.citationCount);
                     return (
                       <div key={stage} className="pt-4 first:pt-0">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600 mb-1">{stage}</p>
                         {stageWorks.length === 0 ? (
-                          <p className="text-xs text-stone-300 pb-2">No work in this set fit this stage.</p>
+                          <p className="text-xs text-stone-300 pb-2">No work found for this stage, even after a targeted search.</p>
                         ) : (
                           stageWorks.map((item, i) => (
                             <ItemRow key={i} item={item} renderMetric={WORK_SORTS.citations.metric} renderLink={w => w.oaUrl || (w.doi ? w.doi : null)} renderBadges={workBadges} />
@@ -359,10 +348,10 @@ export default function PulseView({
                       </div>
                     );
                   })}
-                  {stageGroups.unclassified.length > 0 && (
+                  {readingStagesUnclassified.length > 0 && (
                     <div className="pt-4">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-400 mb-1">Unclassified</p>
-                      {stageGroups.unclassified.map((item, i) => (
+                      {readingStagesUnclassified.map((item, i) => (
                         <ItemRow key={i} item={item} renderMetric={WORK_SORTS.citations.metric} renderLink={w => w.oaUrl || (w.doi ? w.doi : null)} renderBadges={workBadges} />
                       ))}
                     </div>

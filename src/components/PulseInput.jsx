@@ -35,7 +35,9 @@ export default function PulseInput({ onSelect, disabled }) {
     setTopic(v);
     if (!v) return;
     const t = topics.find(x => x.name === v);
-    if (t && t.url) { onSelect(t.url, t.name); return; }
+    // Always pass the subfield id, even for a native pick — Reading Order's
+    // stage-backfill search needs it regardless of how the topic was chosen.
+    if (t && t.url) { onSelect(t.url, t.name, taxonomy?.subfieldUrls?.[subfield]); return; }
     // No OpenAlex id — this came from Claude's suggestion list, so Pulse falls
     // back to a text search instead of an exact topics.id filter. Pass the
     // subfield's own id along so that search stays constrained to it, instead

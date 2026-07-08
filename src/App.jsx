@@ -1007,7 +1007,8 @@ export default function App() {
                 scholarLoading={pulse.scholarLoading}
                 scholarFailed={pulse.scholarFailed}
                 onScholarKeySaved={pulse.refreshScholar}
-                readingStages={pulse.readingStages}
+                readingStageGroups={pulse.readingStageGroups}
+                readingStagesUnclassified={pulse.readingStagesUnclassified}
                 readingStagesLoading={pulse.readingStagesLoading}
                 readingStagesFailed={pulse.readingStagesFailed}
                 onLoadReadingStages={pulse.loadReadingStages}

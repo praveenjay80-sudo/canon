@@ -85,6 +85,24 @@ function normalizeStageName(s) {
   return s.toLowerCase().replace(/[^a-z0-9\s&]/g, '').trim();
 }
 
+// Search-query hints used to backfill a stage that comes up empty after
+// classifying the citation-ranked set — citation rank has nothing to do with
+// whether a work is historically-intuitive or philosophically-framed, so a
+// stage can be genuinely well-represented in the literature while still
+// missing entirely from the top-N-by-citations pool this app otherwise fetches.
+const STAGE_QUERY_HINTS = {
+  'Historical Context & Intuition': 'history introduction overview',
+  'Foundational Textbooks': 'textbook introduction',
+  'Mathematical Rigor': 'rigorous theory foundations',
+  'Advanced Concepts': 'advanced theory',
+  'Specialized Topics': 'special topics applications',
+  'Philosophical Frameworks': 'philosophy foundations interpretation',
+};
+
+function dedupeKey(w) {
+  return w.doi || w.title.toLowerCase().slice(0, 60);
+}
+
 // None of these six stages are derivable from OpenAlex's numeric metadata
 // (citations, FWCI, type, venue) — placing a specific work requires judging
 // what it's actually about, which needs Claude. Unlike claudeValidateWorks,
@@ -212,10 +230,12 @@ export function usePulse() {
   const [scholar, setScholar] = useState([]);
   const [scholarFailed, setScholarFailed] = useState(false);
   const [scholarLoading, setScholarLoading] = useState(false);
-  const [readingStages, setReadingStages] = useState(null);
+  const [readingStageGroups, setReadingStageGroups] = useState(null); // { [stage]: works[] }
+  const [readingStagesUnclassified, setReadingStagesUnclassified] = useState([]);
   const [readingStagesLoading, setReadingStagesLoading] = useState(false);
   const [readingStagesFailed, setReadingStagesFailed] = useState(false);
   const cancelRef = useRef({ aborted: false });
+  const topicMetaRef = useRef({ resolvedId: null, subfieldId: null });
 
   const hasScholarKey = !!localStorage.getItem('canon_serp_key');
 
@@ -233,7 +253,8 @@ export function usePulse() {
     setScholar([]);
     setScholarFailed(false);
     setWasClaudeValidated(false);
-    setReadingStages(null);
+    setReadingStageGroups(null);
+    setReadingStagesUnclassified([]);
     setReadingStagesFailed(false);
 
     const serpKey = localStorage.getItem('canon_serp_key') || '';
@@ -250,6 +271,7 @@ export function usePulse() {
       const resolvedId = topicId || await resolveOpenAlexTopicId(name);
       if (token.aborted) return;
       setIsTextMatch(!resolvedId);
+      topicMetaRef.current = { resolvedId, subfieldId };
 
       let [works, scholarOutcome] = await Promise.all([
         resolvedId ? fetchTopicWorks(resolvedId, 30) : fetchTopicWorksByText(name, 30, subfieldId),
@@ -304,17 +326,86 @@ export function usePulse() {
   }, [topicName]);
 
   // Only called when the user explicitly switches the Works panel to the
-  // Reading Order view — cached per topic (readingStages stays null until
-  // then) so picking a topic never runs this by default.
+  // Reading Order view — cached per topic (readingStageGroups stays null
+  // until then) so picking a topic never runs this by default.
   const loadReadingStages = useCallback(async () => {
-    if (readingStages || readingStagesLoading || !mostCited.length) return;
+    if (readingStageGroups || readingStagesLoading || !mostCited.length) return;
     setReadingStagesLoading(true);
     setReadingStagesFailed(false);
-    const map = await classifyWorksByStage(topicName, mostCited);
-    if (map) setReadingStages(map);
-    else setReadingStagesFailed(true);
+
+    const { resolvedId, subfieldId } = topicMetaRef.current;
+    const seen = new Set(mostCited.map(dedupeKey));
+
+    // The default citation-ranked fetch skews toward papers — explicitly pull
+    // books too, so "Foundational Textbooks" has real candidates to classify
+    // into rather than relying on one happening to be in the top-30-by-citations.
+    const supplementalBooks = resolvedId
+      ? await fetchTopicWorks(resolvedId, 15, 'book')
+      : await fetchTopicWorksByText(topicName, 15, subfieldId, 'book');
+    const pool = [...mostCited];
+    for (const b of supplementalBooks) {
+      const key = dedupeKey(b);
+      if (!seen.has(key)) { seen.add(key); pool.push(b); }
+    }
+
+    const map = await classifyWorksByStage(topicName, pool);
+    if (!map) {
+      setReadingStagesFailed(true);
+      setReadingStagesLoading(false);
+      return;
+    }
+
+    const groups = {};
+    for (const s of READING_STAGES) groups[s] = [];
+    const unclassified = [];
+    pool.forEach((w, i) => {
+      const stage = map[i];
+      if (stage) groups[stage].push(w);
+      else unclassified.push(w);
+    });
+
+    // A stage can be empty not because no such work exists, but because
+    // citation rank has nothing to do with a work's pedagogical role — go
+    // looking specifically for that stage's character rather than leaving it
+    // blank. Runs in parallel, only for stages that actually came up empty.
+    const emptyStages = READING_STAGES.filter(s => groups[s].length === 0);
+    if (emptyStages.length) {
+      const perStage = await Promise.all(emptyStages.map(async stage => {
+        const query = `${topicName} ${STAGE_QUERY_HINTS[stage]}`;
+        const types = stage === 'Foundational Textbooks' ? 'book' : 'article|book';
+        const candidates = await fetchTopicWorksByText(query, 8, subfieldId, types);
+        return { stage, candidates };
+      }));
+
+      const backfillCandidates = [];
+      for (const { stage, candidates } of perStage) {
+        for (const c of candidates) {
+          const key = dedupeKey(c);
+          if (!seen.has(key)) { seen.add(key); backfillCandidates.push({ ...c, _targetStage: stage }); }
+        }
+      }
+
+      if (backfillCandidates.length) {
+        const backfillMap = await classifyWorksByStage(topicName, backfillCandidates);
+        if (backfillMap) {
+          backfillCandidates.forEach((w, i) => {
+            const stage = backfillMap[i];
+            // Only accept if Claude independently confirms the stage it was
+            // fetched for — a targeted search can still surface a work that
+            // actually fits a different (already-populated) stage better.
+            if (stage && stage === w._targetStage) {
+              const { _targetStage, ...work } = w;
+              groups[stage].push(work);
+            }
+          });
+        }
+      }
+    }
+
+    setReadingStageGroups(groups);
+    setReadingStagesUnclassified(unclassified);
     setReadingStagesLoading(false);
-  }, [topicName, mostCited, readingStages, readingStagesLoading]);
+  }, [topicName, mostCited, readingStageGroups, readingStagesLoading]);
 
   const reset = useCallback(() => {
     cancelRef.current.aborted = true;
@@ -328,13 +419,14 @@ export function usePulse() {
     setMostInfluential([]);
     setScholar([]);
     setScholarFailed(false);
-    setReadingStages(null);
+    setReadingStageGroups(null);
+    setReadingStagesUnclassified([]);
     setReadingStagesFailed(false);
   }, []);
 
   return {
     phase, error, topicName, isTextMatch, wasClaudeValidated, mostCited, topAuthors, mostInfluential, scholar, scholarFailed, scholarLoading,
-    readingStages, readingStagesLoading, readingStagesFailed, loadReadingStages,
+    readingStageGroups, readingStagesUnclassified, readingStagesLoading, readingStagesFailed, loadReadingStages,
     hasScholarKey, select, reset, refreshScholar,
   };
 }
