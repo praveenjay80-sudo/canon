@@ -148,6 +148,7 @@ function NodeRow({ node, depth, openSet, onToggle, onGenerate, selectedMode, act
 
 export default function UDCView({ onGenerate }) {
   const [data,        setData]        = useState(null);
+  const [flatData,    setFlatData]    = useState(null);   // full 63k flat list (udc-codes.json)
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState(null);
   const [mode,        setMode]        = useState('path');
@@ -164,10 +165,16 @@ export default function UDCView({ onGenerate }) {
   const readingPath = useReadingPath();
 
   useEffect(() => {
+    // Load hierarchical tree
     fetch('/data/udc-full.json')
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(d => { setData(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
+    // Load full flat 63k list for search + counter (optional — fails gracefully)
+    fetch('/data/udc-codes.json')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setFlatData(d); })
+      .catch(() => {});
   }, []);
 
   const handleGenerate = useCallback((topic, m) => {
@@ -205,35 +212,52 @@ export default function UDCView({ onGenerate }) {
     }
   };
 
-  // Flatten hierarchy for search (depth ≤ 4)
+  // Flatten hierarchy for search, carrying parent breadcrumb
   const allNodes = useMemo(() => {
     if (!data) return [];
     const flat = [];
-    function walk(nodes, depth) {
+    function walk(nodes, depth, parentName) {
       if (depth > 4) return;
       for (const n of nodes) {
-        flat.push({ code: n.code, name: titleCase(n.name) });
-        if (n.children?.length) walk(n.children, depth + 1);
+        flat.push({ code: n.code, name: titleCase(n.name), parent: parentName });
+        if (n.children?.length) walk(n.children, depth + 1, titleCase(n.name));
       }
     }
-    walk(data, 0);
+    walk(data, 0, null);
     return flat;
   }, [data]);
 
+  // Code → name lookup for deriving parent context from flat codes
+  const codeToName = useMemo(() => {
+    const map = {};
+    for (const n of allNodes) map[n.code] = n.name;
+    return map;
+  }, [allNodes]);
+
+  function inferParent(code) {
+    // Try dropping trailing segments (dots, commas, hyphens as separators)
+    for (let i = code.length - 1; i > 0; i--) {
+      const prefix = code.slice(0, i);
+      if (codeToName[prefix]) return codeToName[prefix];
+    }
+    return null;
+  }
+
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return [];
-    const treeMatches = allNodes
-      .filter(n => n.name.toLowerCase().includes(q) || n.code.toLowerCase().includes(q))
-      .map(n => ({ ...n }));
+    if (!q || q.length < 2) return [];
+    const baseList = flatData
+      ? flatData.map(e => ({ code: e.code, name: titleCase(e.label), parent: inferParent(e.code) }))
+      : allNodes;
+    const baseMatches = baseList
+      .filter(n => n.name.toLowerCase().includes(q) || n.code.toLowerCase().includes(q));
+    const seen = new Set(baseMatches.map(n => n.code));
     const newMatches = newCodes
-      .filter(e => titleCase(e.label).toLowerCase().includes(q) || e.code.toLowerCase().includes(q))
-      .map(e => ({ code: e.code, name: titleCase(e.label), isNew: true }));
-    // Merge, tree first, dedup by code
-    const seen = new Set(treeMatches.map(n => n.code));
-    const merged = [...treeMatches, ...newMatches.filter(n => !seen.has(n.code))];
-    return merged.slice(0, 60);
-  }, [search, allNodes, newCodes]);
+      .filter(e => !seen.has(e.code) && (titleCase(e.label).toLowerCase().includes(q) || e.code.toLowerCase().includes(q)))
+      .map(e => ({ code: e.code, name: titleCase(e.label), parent: inferParent(e.code), isNew: true }));
+    return [...baseMatches, ...newMatches].slice(0, 80);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, allNodes, flatData, newCodes, codeToName]);
 
   if (loading) return <div className="mt-8 text-sm font-mono text-stone-400">Loading UDC…</div>;
   if (error)   return <div className="mt-8 text-sm font-mono text-red-500">Error: {error}</div>;
@@ -258,15 +282,19 @@ export default function UDCView({ onGenerate }) {
         <div className="flex items-baseline gap-3 mb-2">
           <h2 className="text-2xl font-bold tracking-tight text-stone-900">Universal Decimal Classification</h2>
           <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 bg-stone-800 text-white">ETH-UDK</span>
+          <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 bg-stone-700 text-white">
+            {(flatData ? flatData.length + newCodes.length : totalNodes + newCodes.length).toLocaleString()} codes
+          </span>
           {newCodes.length > 0 && (
             <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 bg-emerald-700 text-white">
-              {newCodes.length} new
+              +{newCodes.length} new
             </span>
           )}
         </div>
         <div className="flex items-center gap-4 flex-wrap">
           <p className="text-sm text-stone-500">
-            {totalNodes.toLocaleString()} nodes · {totalTerms.toLocaleString()} terms · 9 main classes.
+            {flatData ? `${flatData.length.toLocaleString()} codes searchable` : `${totalNodes.toLocaleString()} nodes`}
+            {' · '}{totalTerms.toLocaleString()} terms · 9 main classes.
             Select a mode, then click any entry to generate.
           </p>
           <button
@@ -321,27 +349,42 @@ export default function UDCView({ onGenerate }) {
       {search.trim() ? (
         /* Search results */
         <div className="border border-stone-200 bg-white">
-          {searchResults.length === 0
+          {search.trim().length < 2
+            ? <div className="p-4 text-sm text-stone-400 font-mono">Type at least 2 characters…</div>
+            : searchResults.length === 0
             ? <div className="p-4 text-sm text-stone-400 font-mono">No matches</div>
-            : searchResults.map((n, i) => (
-              <div key={i} className="group flex items-center gap-3 px-3 py-2 border-b border-stone-50 hover:bg-stone-50 transition-colors">
-                <button
-                  onClick={() => handleGenerate(`${n.name} (UDC ${n.code})`, mode)}
-                  className="flex-1 flex items-center gap-3 text-left min-w-0"
-                >
-                  <CodeBadge code={n.code} />
-                  <span className="text-sm text-stone-800 hover:underline decoration-stone-300 truncate">{n.name}</span>
-                  {n.isNew && (
-                    <span className="shrink-0 text-[8px] font-mono px-1 py-0.5 bg-emerald-100 text-emerald-700 border border-emerald-200">NEW</span>
-                  )}
-                </button>
-                <a
-                  href={`https://www.worldcat.org/search?q=su%3A${encodeURIComponent(n.name)}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="opacity-0 group-hover:opacity-100 shrink-0 text-[9px] font-mono px-1.5 py-0.5 border border-stone-200 text-stone-400 hover:bg-stone-800 hover:text-white hover:border-stone-800 transition-all"
-                >WorldCat</a>
-              </div>
-            ))
+            : searchResults.map((n, i) => {
+              // Context-aware topic: include parent discipline for disambiguation
+              const contextTopic = n.parent
+                ? `${n.name} — ${n.parent} (UDC ${n.code})`
+                : `${n.name} (UDC ${n.code})`;
+              return (
+                <div key={i} className="group flex items-center gap-2 px-3 py-2 border-b border-stone-50 hover:bg-stone-50 transition-colors">
+                  <button
+                    onClick={() => handleGenerate(contextTopic, mode)}
+                    className="flex-1 flex flex-col text-left min-w-0 gap-0.5"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CodeBadge code={n.code} />
+                      <span className="text-sm text-stone-800 hover:underline decoration-stone-300 truncate">{n.name}</span>
+                      {n.isNew && (
+                        <span className="shrink-0 text-[8px] font-mono px-1 py-0.5 bg-emerald-100 text-emerald-700 border border-emerald-200">NEW</span>
+                      )}
+                    </div>
+                    {n.parent && (
+                      <span className="text-[10px] font-mono text-stone-400 pl-5 truncate">
+                        in {n.parent}
+                      </span>
+                    )}
+                  </button>
+                  <a
+                    href={`https://www.worldcat.org/search?q=su%3A${encodeURIComponent(n.name)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="opacity-0 group-hover:opacity-100 shrink-0 text-[9px] font-mono px-1.5 py-0.5 border border-stone-200 text-stone-400 hover:bg-stone-800 hover:text-white hover:border-stone-800 transition-all"
+                  >WorldCat</a>
+                </div>
+              );
+            })
           }
         </div>
       ) : (
