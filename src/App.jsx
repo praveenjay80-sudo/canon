@@ -48,7 +48,8 @@ import FieldIntelligenceView from './components/FieldIntelligenceView';
 import MathExplorerView from './components/MathExplorerView';
 import ConceptTiersView from './components/ConceptTiersView';
 import UDCView from './components/UDCView';
-
+import AcademiaTopicsView from './components/AcademiaTopicsView';
+import { useAcademiaTopics } from './hooks/useAcademiaTopics';
 
 function WorkRow({ w }) {
   return (
@@ -159,6 +160,7 @@ export default function App() {
   const reverse = useReverseMode();
   const curriculum = useCurriculumMode();
   const doctoral = useDoctoralTopics();
+  const academia = useAcademiaTopics();
   const dissertation = useDissertationMode();
   const drift = useCanonDrift();
   const consilience = useConsilience();
@@ -170,7 +172,7 @@ export default function App() {
   const [shake, setShake] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [view, setView] = useState('canon');
-  const [appMode, setAppMode] = useState('canon'); // 'canon' | 'reverse' | 'curriculum' | 'doctoral' | 'dissertation' | 'drift' | 'consilience' | 'inquiry' | 'spectrum' | 'pulse' | 'intelligence' | 'math' | 'concepts' | 'udc'
+  const [appMode, setAppMode] = useState('canon'); // 'canon' | 'reverse' | 'curriculum' | 'doctoral' | 'dissertation' | 'drift' | 'consilience' | 'inquiry' | 'spectrum' | 'pulse' | 'intelligence' | 'math' | 'concepts' | 'udc' | 'academia'
 
   const parsed = useMemo(() => parseCanon(gen.content), [gen.content]);
 
@@ -460,6 +462,16 @@ export default function App() {
                 >
                   UDC
                 </button>
+                <button
+                  onClick={() => { setAppMode('academia'); if (academia.status === 'idle') academia.load(); }}
+                  className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
+                    appMode === 'academia'
+                      ? 'border-b-2 border-blue-600 text-blue-700 font-semibold'
+                      : 'border-b-2 border-transparent text-blue-500 hover:text-blue-700'
+                  }`}
+                >
+                  Academia
+                </button>
               </div>
 
               {/* Tab description */}
@@ -492,6 +504,8 @@ export default function App() {
                   ? 'Browse PhD research topics across every academic field — sourced live from phd.nthrys.com. Click any topic to generate its canon.'
                   : appMode === 'udc'
                   ? 'Universal Decimal Classification — 9,000+ subject codes from ETH Zurich\'s library across 9 main classes. Select a mode, click any code to generate. Check for newly added codes.'
+                  : appMode === 'academia'
+                  ? 'Academia.edu topic hierarchy — 25 disciplines, 661 subtopics, and 200,000+ research interest tags across all fields of scholarship. 3 levels deep, fully searchable.'
                   : ''}
               </p>
             </header>
@@ -1127,6 +1141,24 @@ export default function App() {
             {/* UDC */}
             {appMode === 'udc' && (
               <UDCView onGenerate={handleDoctoralTopicClick} />
+            )}
+
+            {/* Academia.edu Topics */}
+            {appMode === 'academia' && (
+              <AcademiaTopicsView
+                status={academia.status}
+                disciplines={academia.disciplines}
+                children={academia.children}
+                slugs={academia.slugs}
+                total={academia.total}
+                crawlDate={academia.crawlDate}
+                error={academia.error}
+                onLoad={academia.load}
+                onSelectTopic={handleDoctoralTopicClick}
+                onCheckForUpdates={academia.checkForUpdates}
+                scanStatus={academia.scanStatus}
+                newTopics={academia.newTopics}
+              />
             )}
 
             {hasOutput && !isGenerating && !isRefining && enrichment.status !== 'idle' && (
