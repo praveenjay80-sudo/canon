@@ -139,8 +139,13 @@ function groupByLetter(topics) {
     .map(([letter, topics]) => ({ label: letter, topics }));
 }
 
+const GROUP_PAGE = 100;
+
 function GroupRow({ group, subjectSlug, onSelect }) {
   const [expanded, setExpanded] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? group.topics : group.topics.slice(0, GROUP_PAGE);
+
   return (
     <div>
       <div
@@ -154,9 +159,21 @@ function GroupRow({ group, subjectSlug, onSelect }) {
         <span className="text-xs font-semibold text-stone-700">{group.label}</span>
         <span className="text-xs font-mono text-stone-300">{group.topics.length.toLocaleString()}</span>
       </div>
-      {expanded && group.topics.map(t => (
-        <TopicRow key={t.s} topic={t} subjectSlug={subjectSlug} onSelect={onSelect} />
-      ))}
+      {expanded && (
+        <>
+          {visible.map(t => (
+            <TopicRow key={t.s} topic={t} subjectSlug={subjectSlug} onSelect={onSelect} />
+          ))}
+          {!showAll && group.topics.length > GROUP_PAGE && (
+            <button
+              onClick={e => { e.stopPropagation(); setShowAll(true); }}
+              className="pl-10 py-1.5 text-xs text-stone-400 hover:text-stone-600 font-mono"
+            >
+              +{(group.topics.length - GROUP_PAGE).toLocaleString()} more…
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }
