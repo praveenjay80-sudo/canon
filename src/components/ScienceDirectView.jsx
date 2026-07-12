@@ -4,8 +4,9 @@ import { useState, useMemo, useCallback, useRef } from 'react';
 // Cache stores { desc, subfield, prereqs } objects
 const infoCache = new Map();
 
-async function fetchTopicInfo(topicName) {
-  if (infoCache.has(topicName)) return infoCache.get(topicName);
+async function fetchTopicInfo(topicName, subjectName) {
+  const cacheKey = `${subjectName}::${topicName}`;
+  if (infoCache.has(cacheKey)) return infoCache.get(cacheKey);
   const key = localStorage.getItem('canon_api_key') || import.meta.env?.VITE_ANTHROPIC_API_KEY || '';
   if (!key) return null;
   try {
@@ -20,10 +21,10 @@ async function fetchTopicInfo(topicName) {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 200,
-        system: `You are a scientific encyclopedia. For the given research topic respond in exactly this format with no other text:
-DESC: one sentence under 25 words defining the topic.
-SUBFIELD: 1–3 words naming the subfield (e.g. Machine Learning, Organic Chemistry, Fluid Mechanics).
-PREREQS: 3–5 comma-separated prerequisite topics or concepts.`,
+        system: `You are a scientific encyclopedia. For the given research topic within the field of ${subjectName}, respond in exactly this format with no other text:
+DESC: one sentence under 25 words defining the topic as it applies to ${subjectName}.
+SUBFIELD: 1–3 words naming the subfield within ${subjectName}.
+PREREQS: 3–5 comma-separated prerequisite topics or concepts specific to ${subjectName}.`,
         messages: [{ role: 'user', content: topicName }],
       }),
     });
@@ -32,7 +33,7 @@ PREREQS: 3–5 comma-separated prerequisite topics or concepts.`,
     const raw = data.content?.[0]?.text?.trim() || '';
     const get = (tag) => { const m = raw.match(new RegExp(`${tag}:\\s*(.+)`)); return m ? m[1].trim() : null; };
     const info = { desc: get('DESC'), subfield: get('SUBFIELD'), prereqs: get('PREREQS') };
-    if (info.desc || info.subfield || info.prereqs) infoCache.set(topicName, info);
+    if (info.desc || info.subfield || info.prereqs) infoCache.set(cacheKey, info);
     return info;
   } catch { return null; }
 }
@@ -80,18 +81,19 @@ function ModePicker({ name, onSelect, onClose }) {
   );
 }
 
-function TopicRow({ topic, subjectSlug, onSelect }) {
+function TopicRow({ topic, subjectSlug, subjectName, onSelect }) {
+  const cacheKey = `${subjectName}::${topic.n}`;
   const [open, setOpen] = useState(false);
-  const [info, setInfo] = useState(infoCache.get(topic.n) || null);
+  const [info, setInfo] = useState(infoCache.get(cacheKey) || null);
   const [loading, setLoading] = useState(false);
   const fetchedRef = useRef(false);
 
   function handleOpen() {
     setOpen(o => !o);
-    if (!fetchedRef.current && !infoCache.has(topic.n)) {
+    if (!fetchedRef.current && !infoCache.has(cacheKey)) {
       fetchedRef.current = true;
       setLoading(true);
-      fetchTopicInfo(topic.n).then(i => { setInfo(i); setLoading(false); });
+      fetchTopicInfo(topic.n, subjectName).then(i => { setInfo(i); setLoading(false); });
     }
   }
 
@@ -163,7 +165,7 @@ function groupByLetter(topics) {
 
 const GROUP_PAGE = 100;
 
-function GroupRow({ group, subjectSlug, onSelect }) {
+function GroupRow({ group, subjectSlug, subjectName, onSelect }) {
   const [expanded, setExpanded] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? group.topics : group.topics.slice(0, GROUP_PAGE);
@@ -184,7 +186,7 @@ function GroupRow({ group, subjectSlug, onSelect }) {
       {expanded && (
         <>
           {visible.map(t => (
-            <TopicRow key={t.s} topic={t} subjectSlug={subjectSlug} onSelect={onSelect} />
+            <TopicRow key={t.s} topic={t} subjectSlug={subjectSlug} subjectName={subjectName} onSelect={onSelect} />
           ))}
           {!showAll && group.topics.length > GROUP_PAGE && (
             <button
@@ -247,10 +249,10 @@ function SubjectRow({ subject, topics, onSelect, searchActive }) {
         <div className="border-t border-stone-100">
           {searchActive
             ? topics.map(t => (
-                <TopicRow key={t.s} topic={t} subjectSlug={subject.slug} onSelect={onSelect} />
+                <TopicRow key={t.s} topic={t} subjectSlug={subject.slug} subjectName={subject.name} onSelect={onSelect} />
               ))
             : groups.map(g => (
-                <GroupRow key={g.label} group={g} subjectSlug={subject.slug} onSelect={onSelect} />
+                <GroupRow key={g.label} group={g} subjectSlug={subject.slug} subjectName={subject.name} onSelect={onSelect} />
               ))
           }
         </div>
