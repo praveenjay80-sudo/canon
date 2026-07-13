@@ -25,7 +25,7 @@ const CONCEPTS_PROMPT = `Map every essential concept in the given topic. Organiz
 ### Tier 1: Prerequisite Concepts
 Concepts someone must understand before engaging with this topic at all.
 
-### Tier 2: Core Concepts  
+### Tier 2: Core Concepts
 The central concepts this field actually studies.
 
 ### Tier 3: Advanced Concepts
@@ -155,79 +155,99 @@ Cover:
 
 List at least 12 events spanning the full history.`;
 
+const PROMPTS = {
+  questions: QUESTIONS_PROMPT,
+  concepts: CONCEPTS_PROMPT,
+  schools: SCHOOLS_PROMPT,
+  prerequisites: PREREQUISITES_PROMPT,
+  canon: CANON_PROMPT,
+  thinkers: THINKERS_PROMPT,
+  methodologies: METHODOLOGIES_PROMPT,
+  adjacent: ADJACENT_FIELDS_PROMPT,
+  consilience: CONSILIENCE_PROMPT,
+  frontier: FRONTIER_PROMPT,
+  timeline: TIMELINE_PROMPT,
+  conferences: CONFERENCES_PROMPT,
+};
+
 // ── Section definitions ─────────────────────────────────────────────────────
 
 export const SECTION_DEFS = [
-  { key: 'questions',     label: 'Fundamental Questions',       model: SONNET, needsHarvest: false, icon: '?' },
-  { key: 'concepts',      label: 'Complete Concept Map',        model: SONNET, needsHarvest: false, icon: '◇' },
-  { key: 'schools',       label: 'Schools of Thought',          model: SONNET, needsHarvest: false, icon: '⊕' },
-  { key: 'prerequisites', label: 'Prerequisite Path',           model: SONNET, needsHarvest: false, icon: '→' },
-  { key: 'canon',         label: 'Canon by Learning Stage',     model: SONNET, needsHarvest: true,  icon: '📖' },
-  { key: 'thinkers',      label: 'Thinkers & Researchers',      model: SONNET, needsHarvest: true,  icon: '👤' },
-  { key: 'methodologies', label: 'Methodologies & Tools',       model: SONNET, needsHarvest: false, icon: '⚙' },
-  { key: 'adjacent',      label: 'Adjacent Fields',             model: SONNET, needsHarvest: false, icon: '↔' },
-  { key: 'consilience',   label: 'Consilience (All Disciplines)', model: SONNET, needsHarvest: false, icon: '◈' },
-  { key: 'frontier',      label: 'Open Problems & Controversies', model: SONNET, needsHarvest: true, icon: '⧩' },
-  { key: 'timeline',      label: 'Intellectual Timeline',       model: HAIKU,  needsHarvest: false, icon: '⊞' },
-  { key: 'conferences',   label: 'Conferences & Journals',      model: HAIKU,  needsHarvest: false, icon: '◉' },
+  { key: 'questions',     label: 'Fundamental Questions',        model: SONNET, needsHarvest: false, maxTokens: 4096 },
+  { key: 'concepts',      label: 'Complete Concept Map',         model: SONNET, needsHarvest: false, maxTokens: 4096 },
+  { key: 'schools',       label: 'Schools of Thought',           model: SONNET, needsHarvest: false, maxTokens: 4096 },
+  { key: 'prerequisites', label: 'Prerequisite Path',            model: SONNET, needsHarvest: false, maxTokens: 4096 },
+  { key: 'canon',         label: 'Canon by Learning Stage',      model: SONNET, needsHarvest: true,  maxTokens: 6144 },
+  { key: 'thinkers',      label: 'Thinkers & Researchers',       model: SONNET, needsHarvest: true,  maxTokens: 4096 },
+  { key: 'methodologies', label: 'Methodologies & Tools',        model: SONNET, needsHarvest: false, maxTokens: 4096 },
+  { key: 'adjacent',      label: 'Adjacent Fields',              model: SONNET, needsHarvest: false, maxTokens: 4096 },
+  { key: 'consilience',   label: 'Consilience (All Disciplines)', model: SONNET, needsHarvest: false, maxTokens: 6144 },
+  { key: 'frontier',      label: 'Open Problems & Controversies', model: SONNET, needsHarvest: true, maxTokens: 6144 },
+  { key: 'timeline',      label: 'Intellectual Timeline',        model: HAIKU,  needsHarvest: false, maxTokens: 3072 },
+  { key: 'conferences',   label: 'Conferences & Journals',       model: HAIKU,  needsHarvest: false, maxTokens: 3072 },
 ];
 
 const INIT_SECTIONS = Object.fromEntries(
   SECTION_DEFS.map(s => [s.key, { phase: 'idle', content: '' }])
 );
 
-// ── Streaming helper ────────────────────────────────────────────────────────
+// ── Streaming helper (mirrors working Overall Aggregator) ───────────────────
 
 async function streamSection(system, userMsg, signal, onChunk, maxTokens, model) {
-  const apiKey = resolveApiKey();
-  if (!apiKey) throw new Error('Anthropic API key is required');
+  const key = resolveApiKey();
+  if (!key) throw new Error('No API key set — add one in Settings.');
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
       model: model || SONNET,
       max_tokens: maxTokens || 4096,
       stream: true,
-      messages: [
-        { role: 'user', content: userMsg },
-      ],
-      system: system,
+      system,
+      messages: [{ role: 'user', content: userMsg }],
     }),
     signal,
   });
 
   if (!res.ok) {
-    const text = await res.text().catch(() => 'Unknown error');
-    throw new Error(`Claude API error ${res.status}: ${text}`);
+    let msg = `API error ${res.status}`;
+    try { const e = await res.json(); msg = e.error?.message || msg; } catch {}
+    throw new Error(msg);
   }
 
   const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+  const dec = new TextDecoder();
+  let buf = '';
+  let accumulated = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith('data: ')) continue;
-      const data = trimmed.slice(6).trim();
-      if (!data || data === '[DONE]') continue;
-      try {
-        const parsed = JSON.parse(data);
-        if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-          onChunk(parsed.delta.text);
-        }
-      } catch { /* skip malformed SSE */ }
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const d = line.slice(6).trim();
+        if (!d || d === '[DONE]') continue;
+        try {
+          const ev = JSON.parse(d);
+          if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+            accumulated += ev.delta.text;
+            onChunk(accumulated);
+          }
+        } catch { /* skip malformed */ }
+      }
     }
+  } finally {
+    reader.releaseLock();
   }
 }
 
@@ -237,146 +257,132 @@ export function useUnifiedBrowser() {
   const [phase, setPhase] = useState('idle'); // idle | harvesting | streaming | complete | error
   const [topic, setTopic] = useState('');
   const [error, setError] = useState(null);
-  const [sections, setSections] = useState(INIT_SECTIONS);
+  const [sections, setSections] = useState(() => ({ ...INIT_SECTIONS }));
   const [dataCount, setDataCount] = useState(0);
   const [harvestedPapers, setHarvestedPapers] = useState([]);
   const [harvestedTextbooks, setHarvestedTextbooks] = useState([]);
-
-  const harvestData = useRef(null);
   const abortRef = useRef(null);
 
-  const completedCount = Object.values(sections)
-    .filter(s => s.phase === 'complete').length;
-  const activeCount = Object.values(sections)
-    .filter(s => s.phase === 'streaming').length;
+  const completedCount = Object.values(sections).filter(s => s.phase === 'complete').length;
+  const activeCount = Object.values(sections).filter(s => s.phase === 'streaming').length;
 
-  const setSectionContent = useCallback((key, content) => {
+  const setSectionState = useCallback((key, update) => {
     setSections(prev => ({
       ...prev,
-      [key]: { ...prev[key], content: (prev[key].content || '') + content },
-    }));
-  }, []);
-
-  const setSectionPhase = useCallback((key, phase) => {
-    setSections(prev => ({
-      ...prev,
-      [key]: { ...prev[key], phase },
+      [key]: typeof update === 'function' ? update(prev[key]) : { ...prev[key], ...update },
     }));
   }, []);
 
   const reset = useCallback(() => {
-    if (abortRef.current) abortRef.current.abort();
+    abortRef.current?.abort();
+    abortRef.current = null;
     setPhase('idle');
     setTopic('');
     setError(null);
-    setSections(INIT_SECTIONS);
+    setSections({ ...INIT_SECTIONS });
     setDataCount(0);
     setHarvestedPapers([]);
     setHarvestedTextbooks([]);
-    harvestData.current = null;
   }, []);
 
   const run = useCallback(async (inputTopic) => {
-    if (abortRef.current) abortRef.current.abort();
-    const abort = new AbortController();
-    abortRef.current = abort;
+    // Abort any previous run
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const { signal } = controller;
 
-    reset();
+    // Reset UI state without aborting the controller we just created
     setTopic(inputTopic);
+    setError(null);
+    setDataCount(0);
+    setSections({ ...INIT_SECTIONS });
+    setHarvestedPapers([]);
+    setHarvestedTextbooks([]);
     setPhase('harvesting');
 
-    const needsHarvestKeys = SECTION_DEFS.filter(s => s.needsHarvest).map(s => s.key);
-    for (const key of needsHarvestKeys) setSectionPhase(key, 'waiting');
+    const apiKey = resolveApiKey();
+    if (!apiKey) {
+      setError('No API key set — add one in Settings.');
+      setPhase('error');
+      return;
+    }
 
-    // Harvest data for canon-dependent sections
-    let papers = [];
-    let textbooks = [];
+    // Harvest data (fail soft — Claude can supplement from knowledge)
+    let works = [];
     let ospWorks = [];
     let seminalWorks = [];
 
     try {
       const [hResult, ospResult, seminalResult] = await Promise.all([
-        harvestAll(inputTopic, (msg) => {}),
+        harvestAll(inputTopic).catch(() => ({ merged: [], counts: {} })),
         syllabusHarvest(inputTopic).catch(() => []),
         seminalPapersHarvest(inputTopic).catch(() => []),
       ]);
 
-      papers = (hResult?.papers || []).slice(0, 60);
-      textbooks = (hResult?.textbooks || []).slice(0, 40);
-      ospWorks = ospResult.slice(0, 40);
-      seminalWorks = seminalResult.slice(0, 40);
+      if (signal.aborted) return;
 
-      setHarvestedPapers(papers);
-      setHarvestedTextbooks(textbooks);
-      setDataCount(papers.length + textbooks.length + ospWorks.length + seminalWorks.length);
-    } catch (e) {
-      // Can proceed without harvest data — Claude supplements from knowledge
+      works = (hResult?.merged || []).slice(0, 80);
+      ospWorks = (ospResult || []).slice(0, 40);
+      seminalWorks = (seminalResult || []).slice(0, 40);
+
+      setHarvestedPapers(works);
+      setHarvestedTextbooks(ospWorks);
+      setDataCount(works.length + ospWorks.length + seminalWorks.length);
+    } catch {
+      // proceed without data
     }
 
+    if (signal.aborted) return;
     setPhase('streaming');
 
-    const dataContext = [
-      ...papers.map(w => `- "${w.title}" by ${w.authors || 'Unknown'} (${w.year || '?'}) — ${w.citationCount || 0} citations`),
-      ...textbooks.map(w => `- "${w.title}" by ${w.authors || 'Unknown'} (${w.year || '?'}) — Textbook`),
-      ...ospWorks.map(w => `- "${w.title}" by ${w.authors || 'Unknown'} — Taught in ${w.syllabusCount || 0} courses`),
-      ...seminalWorks.map(w => `- "${w.title}" by ${w.authors || 'Unknown'} (${w.year || '?'}) — ${w.influentialCitationCount || 0} influential citations`),
-    ].join('\n');
+    // Build context block for harvest-dependent sections
+    const workLines = works.slice(0, 60).map(w =>
+      `- "${w.title}" by ${w.authors || 'Unknown'}${w.year ? ` (${w.year})` : ''} — ${w.citationCount || 0} citations`
+    ).join('\n');
+    const ospLines = ospWorks.slice(0, 40).map(w =>
+      `- "${w.title}" by ${w.authors || 'Unknown'} — Taught in ${w.syllabusCount || 0} courses`
+    ).join('\n');
+    const seminalLines = seminalWorks.slice(0, 40).map(w =>
+      `- "${w.title}" by ${w.authors || 'Unknown'}${w.year ? ` (${w.year})` : ''} — ${w.influentialCitationCount || 0} influential citations`
+    ).join('\n');
 
-    // Fire all sections in parallel
-    const tasks = SECTION_DEFS.map(def => {
-      const userMsg = def.needsHarvest && dataContext
-        ? `Topic: ${inputTopic}\n\nHarvested data:\n${dataContext}\n\nYour task:\n${def.label}`
-        : `Topic: ${inputTopic}\n\nYour task:\n${def.label}`;
+    const dataBlock = `\n\n=== HARVESTED WORKS ===\n${workLines || '(none)'}\n\n=== MOST TAUGHT (Open Syllabus) ===\n${ospLines || '(none)'}\n\n=== SEMINAL PAPERS ===\n${seminalLines || '(none)'}`;
 
-      const systemPrompt = (() => {
-        switch (def.key) {
-          case 'questions':     return QUESTIONS_PROMPT;
-          case 'concepts':      return CONCEPTS_PROMPT;
-          case 'schools':       return SCHOOLS_PROMPT;
-          case 'prerequisites': return PREREQUISITES_PROMPT;
-          case 'canon':         return CANON_PROMPT;
-          case 'thinkers':      return THINKERS_PROMPT;
-          case 'methodologies': return METHODOLOGIES_PROMPT;
-          case 'adjacent':      return ADJACENT_FIELDS_PROMPT;
-          case 'consilience':   return CONSILIENCE_PROMPT;
-          case 'frontier':      return FRONTIER_PROMPT;
-          case 'timeline':      return TIMELINE_PROMPT;
-          case 'conferences':   return CONFERENCES_PROMPT;
-          default:              return '';
-        }
-      })();
+    // Fire all 12 sections in parallel
+    await Promise.all(
+      SECTION_DEFS.map(async (def) => {
+        if (signal.aborted) return;
+        setSectionState(def.key, { phase: 'streaming', content: '' });
 
-      return async () => {
-        if (abort.signal.aborted) return;
-        setSectionPhase(def.key, 'streaming');
+        const userMsg = def.needsHarvest
+          ? `Topic: ${inputTopic}${dataBlock}`
+          : `Topic: ${inputTopic}`;
+
         try {
-          const maxTokens = ['canon', 'consilience', 'frontier'].includes(def.key) ? 6144 : 4096;
           await streamSection(
-            systemPrompt,
+            PROMPTS[def.key],
             userMsg,
-            abort.signal,
-            (chunk) => setSectionContent(def.key, chunk),
-            maxTokens,
+            signal,
+            (text) => setSectionState(def.key, { phase: 'streaming', content: text }),
+            def.maxTokens,
             def.model
           );
-          if (!abort.signal.aborted) {
-            setSectionPhase(def.key, 'complete');
+          if (!signal.aborted) {
+            setSectionState(def.key, prev => ({ ...prev, phase: 'complete' }));
           }
-        } catch (e) {
-          if (e.name === 'AbortError') return;
-          setSectionPhase(def.key, 'error');
-          setSectionContent(def.key, `\n\n*Failed: ${e.message}*`);
+        } catch (err) {
+          if (signal.aborted) return;
+          setSectionState(def.key, {
+            phase: 'error',
+            content: `*Failed: ${err.message || 'Generation failed.'}*`,
+          });
         }
-      };
-    });
+      })
+    );
 
-    // Fire all sections in parallel
-    await Promise.allSettled(tasks.map(t => t()));
-
-    if (!abort.signal.aborted) {
-      setPhase('complete');
-    }
-  }, [reset, setSectionContent, setSectionPhase]);
+    if (!signal.aborted) setPhase('complete');
+  }, [setSectionState]);
 
   return {
     phase, topic, error,
