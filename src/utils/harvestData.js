@@ -20,16 +20,21 @@ function isSerial(title) {
   return SERIAL_WORDS.some(w => t.startsWith(w) || t.includes(` ${w}`));
 }
 
-// Topic relevance: at least one meaningful topic word must appear in the title
+// Topic relevance: the topic phrase or majority of topic words must appear in the title.
+// This prevents full-text-search results (papers that mention the topic in passing) from
+// polluting the list with completely off-topic papers.
 function topicWords(topic) {
-  return topic.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 3);
+  return topic.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length >= 3);
 }
 
 function isTopicRelevant(title, topic) {
+  const t = (title || '').toLowerCase();
+  const topicPhrase = topic.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  if (t.includes(topicPhrase)) return true;
   const tw = topicWords(topic);
   if (!tw.length) return true;
-  const t = (title || '').toLowerCase();
-  return tw.some(w => t.includes(w));
+  const matched = tw.filter(w => t.includes(w)).length;
+  return matched >= Math.max(1, Math.ceil(tw.length * 0.6));
 }
 
 function fetchWithTimeout(url, ms = 12000) {
@@ -65,7 +70,7 @@ async function harvestOAPapers(topic, limit = 60) {
     if (!res.ok) return [];
     const { results = [] } = await res.json();
     return results
-      .filter(w => w.title && (w.cited_by_count || 0) > 10)
+      .filter(w => w.title && (w.cited_by_count || 0) > 10 && isTopicRelevant(w.title, topic))
       .map(w => oaWork(w, 'openalex-papers'));
   } catch { return []; }
 }
@@ -79,7 +84,7 @@ async function harvestOABooks(topic, limit = 30) {
     if (!res.ok) return [];
     const { results = [] } = await res.json();
     return results
-      .filter(w => w.title && !isSerial(w.title) && (w.cited_by_count || 0) > 5)
+      .filter(w => w.title && !isSerial(w.title) && (w.cited_by_count || 0) > 5 && isTopicRelevant(w.title, topic))
       .map(w => oaWork(w, 'openalex-books'));
   } catch { return []; }
 }
@@ -94,7 +99,7 @@ async function harvestOARecent(topic, limit = 20) {
     if (!res.ok) return [];
     const { results = [] } = await res.json();
     return results
-      .filter(w => w.title && (w.cited_by_count || 0) > 50)
+      .filter(w => w.title && (w.cited_by_count || 0) > 50 && isTopicRelevant(w.title, topic))
       .map(w => ({ ...oaWork(w, 'openalex-recent'), isRecent: true }));
   } catch { return []; }
 }
@@ -108,7 +113,7 @@ async function harvestS2Papers(topic, limit = 40) {
     if (!res.ok) return [];
     const { data = [] } = await res.json();
     return data
-      .filter(p => p.title && (p.influentialCitationCount || 0) > 0)
+      .filter(p => p.title && (p.influentialCitationCount || 0) > 0 && isTopicRelevant(p.title, topic))
       .map(p => ({
         title: p.title,
         authors: (p.authors || []).map(a => a.name).filter(Boolean).slice(0, 3).join(', '),
@@ -146,7 +151,7 @@ async function harvestS2Textbooks(topic, limit = 20) {
         const res = await fetchWithTimeout(url);
         if (!res.ok) return [];
         const { data = [] } = await res.json();
-        return data.filter(p => p.title && (p.citationCount || 0) > 100);
+        return data.filter(p => p.title && (p.citationCount || 0) > 100 && isTopicRelevant(p.title, topic));
       } catch { return []; }
     })
   );

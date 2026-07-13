@@ -76,9 +76,9 @@ export function extractConcepts(text) {
 
     if (currentTier === null) continue;
 
-    // - Concept Name — definition
-    // - **Concept Name** — definition
-    const m = trimmed.match(/^[-*]\s+\*?\*?([^*\n—\-]{2,80}?)\*?\*?\s*[—\-]\s+(.{3,})/);
+    // - Concept Name — definition  /  1. Concept Name — definition  /  **Concept Name** — definition
+    const m = trimmed.match(/^(?:[-*]|\d+\.)\s+\*?\*?([^*\n—\-]{2,80}?)\*?\*?\s*[—\-]\s+(.{3,})/)
+           || trimmed.match(/^\*\*([^*\n—\-]{2,80}?)\*\*\s*[—\-]\s+(.{3,})/);
     if (m) {
       const name = m[1].trim();
       const definition = m[2].trim();

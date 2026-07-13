@@ -367,7 +367,7 @@ function ProgressBar({ completedCount, activeCount, total }) {
 
 // ── Connectivity Dashboard ───────────────────────────────────────────────────
 
-function ConnectivityDashboard({ parsedEntities, entityIndex, harvestedPapers, onEntityClick }) {
+function ConnectivityDashboard({ parsedEntities, entityIndex, harvestedPapers, onEntityClick, activeCount }) {
   const topAuthors = Array.from(entityIndex.authorProfile.values())
     .sort((a, b) => b.totalCitations - a.totalCitations)
     .slice(0, 12);
@@ -406,7 +406,9 @@ function ConnectivityDashboard({ parsedEntities, entityIndex, harvestedPapers, o
                 ))}
               </div>
             ) : (
-              <div className="text-stone-300 font-mono text-[10px]">Generating...</div>
+              <div className="text-stone-300 font-mono text-[10px]">
+                {activeCount > 0 ? 'Generating...' : 'Generate the "Complete Concept Map" section to see concepts'}
+              </div>
             )}
           </div>
           <div>
@@ -532,6 +534,7 @@ export default function UnifiedKnowledgePane({
           entityIndex={entityIndex}
           harvestedPapers={harvestedPapers}
           onEntityClick={openEntity}
+          activeCount={activeCount}
         />
         {SECTION_DEFS.filter(def => sections[def.key]?.phase !== 'skipped').map(def => (
           <SectionCard
