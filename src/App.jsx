@@ -1335,6 +1335,7 @@ export default function App() {
                 count={topScientists.count}
                 capped={topScientists.capped}
                 error={topScientists.error}
+                offline={topScientists.offline}
                 page={topScientists.page}
                 totalPages={topScientists.totalPages}
                 onLoad={topScientists.load}
@@ -1344,6 +1345,11 @@ export default function App() {
                 scanStatus={topScientists.scanStatus}
                 scanResult={topScientists.scanResult}
                 onCheckForUpdates={topScientists.checkForUpdates}
+                importedDatasets={topScientists.importedDatasets}
+                importStatus={topScientists.importStatus}
+                importError={topScientists.importError}
+                onImportFile={topScientists.importFile}
+                onRemoveImport={topScientists.removeImport}
               />
             )}
 

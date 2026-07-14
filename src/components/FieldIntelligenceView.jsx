@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import LeadingResearchersPanel from './LeadingResearchersPanel.jsx';
 
 const SYNOPSIS_PROMPT = `You are an expert explainer. Your job is to describe a scholarly work in completely plain, conversational English that anyone can follow with zero prior knowledge. Write as if explaining to a curious, intelligent friend who has never studied this subject and has never heard of this work.
 
@@ -851,6 +852,12 @@ export default function FieldIntelligenceView({
         <p className="text-xs font-mono text-stone-400 mb-2">
           {dataCount} works harvested · {currentTopic}
         </p>
+      )}
+
+      {currentTopic && (
+        <div className="mb-6">
+          <LeadingResearchersPanel topic={currentTopic} />
+        </div>
       )}
 
       {/* Only the active tab renders — no hidden panels that can silently error */}

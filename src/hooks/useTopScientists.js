@@ -1,4 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { parseTopSciExcel } from '../utils/topSciImport.js';
+import { saveLocalDataset, getLocalDataset, listLocalDatasets, deleteLocalDataset, queryLocalDataset } from '../utils/topSciLocalDb.js';
 
 const DEFAULT_FILTERS = {
   year: '2024',
@@ -23,12 +25,30 @@ export function useTopScientists() {
   const [count, setCount] = useState(0);
   const [capped, setCapped] = useState(false);
   const [error, setError] = useState(null);
+  const [offline, setOffline] = useState(false);
   const reqIdRef = useRef(0);
+
+  // Tries the local IndexedDB import for this year/type when the live proxy
+  // is unreachable — resilience against pasanhu.cn going away, not a
+  // replacement for live data otherwise. Returns true if it served the query.
+  const tryLocalFallback = useCallback(async (f, p, reqId) => {
+    const local = await getLocalDataset(f.year, f.type).catch(() => null);
+    if (!local) return false;
+    if (reqId !== reqIdRef.current) return true;
+    const data = queryLocalDataset(local, f, p, PAGE_LIMIT);
+    setRows(data.rows);
+    setCount(data.count);
+    setCapped(data.capped);
+    setOffline(true);
+    setStatus('complete');
+    return true;
+  }, []);
 
   const runQuery = useCallback(async (f, p) => {
     const reqId = ++reqIdRef.current;
     setStatus('loading');
     setError(null);
+    setOffline(false);
     try {
       const params = new URLSearchParams({
         year: f.year, type: f.type, sm_field: f.sm_field, sm_subfield_1: f.sm_subfield_1,
@@ -38,17 +58,21 @@ export function useTopScientists() {
       const res = await fetch(`/api/topsci/query?${params}`);
       const data = await res.json();
       if (reqId !== reqIdRef.current) return; // stale response — a newer query superseded this one
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      if (!res.ok) {
+        if (await tryLocalFallback(f, p, reqId)) return;
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
       setRows(data.rows);
       setCount(data.count);
       setCapped(data.capped);
       setStatus('complete');
     } catch (e) {
       if (reqId !== reqIdRef.current) return;
+      if (await tryLocalFallback(f, p, reqId)) return;
       setError(e.message);
       setStatus('error');
     }
-  }, []);
+  }, [tryLocalFallback]);
 
   const load = useCallback(() => {
     runQuery(DEFAULT_FILTERS, 1);
@@ -111,10 +135,51 @@ export function useTopScientists() {
     }
   }, []);
 
+  // ── Excel import (resilience fallback) ──────────────────────────────────
+  const [importedDatasets, setImportedDatasets] = useState([]);
+  const [importStatus, setImportStatus] = useState('idle'); // 'idle' | 'importing' | 'error'
+  const [importError, setImportError] = useState(null);
+
+  const refreshImportedDatasets = useCallback(() => {
+    listLocalDatasets().then(setImportedDatasets).catch(() => {});
+  }, []);
+
+  useEffect(() => { refreshImportedDatasets(); }, [refreshImportedDatasets]);
+
+  const importFile = useCallback(async (file) => {
+    setImportStatus('importing');
+    setImportError(null);
+    try {
+      const { year, type, rows: parsed, count: n } = await parseTopSciExcel(file);
+      if (n === 0) throw new Error('No usable rows found in this file');
+      await saveLocalDataset(year, type, parsed, file.name);
+      refreshImportedDatasets();
+      // A successfully-imported year is real data, whether or not it's
+      // confirmed live yet — self-heal it into the Year dropdown the same
+      // way checkForUpdates does, so it's selectable immediately.
+      const extraYears = JSON.parse(localStorage.getItem('topsci_extra_years') || '[]');
+      if (!extraYears.includes(year)) {
+        localStorage.setItem('topsci_extra_years', JSON.stringify([...extraYears, year]));
+      }
+      setImportStatus('idle');
+      return { year, type, count: n };
+    } catch (e) {
+      setImportError(e.message);
+      setImportStatus('error');
+      throw e;
+    }
+  }, [refreshImportedDatasets]);
+
+  const removeImport = useCallback(async (year, type) => {
+    await deleteLocalDataset(year, type);
+    refreshImportedDatasets();
+  }, [refreshImportedDatasets]);
+
   return {
-    filters, page, status, rows, count, capped, error,
+    filters, page, status, rows, count, capped, error, offline,
     pageLimit: PAGE_LIMIT, totalPages: Math.max(1, Math.ceil(count / PAGE_LIMIT)),
     load, setFilters, goToPage,
     scanStatus, scanResult, checkForUpdates,
+    importedDatasets, importStatus, importError, importFile, removeImport,
   };
 }

@@ -10,9 +10,11 @@ function readPatch(key) {
   try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; }
 }
 
-// Merges the one-time facets crawl with anything Check for Updates has
-// since patched into localStorage — self-healing without a redeploy.
-function useMergedFacets() {
+// Merges the one-time facets crawl with anything Check for Updates (or a
+// successful import) has since patched into localStorage — self-healing
+// without a redeploy. `version` is a bump counter passed by the caller so
+// this recomputes right after a patch, instead of only on next mount.
+function useMergedFacets(version) {
   return useMemo(() => {
     const extraYears = readPatch('topsci_extra_years');
     const extraFields = readPatch('topsci_extra_fields');
@@ -27,7 +29,8 @@ function useMergedFacets() {
       // parent field from a flat sample — they only show up in the
       // unconstrained Secondary Subfield dropdown until a full recrawl.
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version]);
 }
 
 const SORT_OPTIONS = [
@@ -456,6 +459,90 @@ function ScientistRow({ row, rank, year, type, onSelect }) {
   );
 }
 
+function fmtDate(ts) {
+  return new Date(ts).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function ImportPanel({ importedDatasets, importStatus, importError, onImportFile, onRemoveImport, onImported }) {
+  const [open, setOpen] = useState(false);
+  const fileInputRef = useRef(null);
+  const [lastImported, setLastImported] = useState(null);
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setLastImported(null);
+    try {
+      const result = await onImportFile(file);
+      setLastImported({ ...result, fileName: file.name });
+      onImported();
+    } catch {
+      // importError state already carries the message
+    }
+  }
+
+  return (
+    <div className="mb-4 border border-stone-200 rounded">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-2 text-xs font-mono text-stone-500 hover:bg-stone-50 transition-colors"
+      >
+        <span>Offline data — {importedDatasets.length} imported dataset{importedDatasets.length === 1 ? '' : 's'}</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className={`transition-transform ${open ? 'rotate-180' : ''}`}>
+          <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="border-t border-stone-100 px-3 py-3 space-y-3">
+          <p className="text-xs text-stone-400 leading-relaxed">
+            Import an official Ioannidis "World's Top 2% Scientists" Excel file (Single Year or Career, from{' '}
+            <a href="https://data.mendeley.com/datasets/btchxktzyw" target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
+              Mendeley Data
+            </a>) as an offline fallback — used automatically if the live pasanhu.cn lookup ever fails for that year/type. Year and type are read from the file itself.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importStatus === 'importing'}
+              className="px-3 py-1.5 text-xs bg-stone-900 text-white hover:bg-stone-700 disabled:opacity-40 transition-colors font-mono"
+            >
+              {importStatus === 'importing' ? 'Importing…' : 'Choose .xlsx file'}
+            </button>
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFile} className="hidden" />
+          </div>
+          {importStatus === 'error' && importError && (
+            <p className="text-xs text-red-600 font-mono">{importError}</p>
+          )}
+          {lastImported && (
+            <p className="text-xs text-emerald-700 font-mono">
+              Imported {lastImported.count.toLocaleString()} rows from "{lastImported.fileName}" — {lastImported.year} {lastImported.type === 'CAREER' ? 'Career' : 'Single Year'}.
+            </p>
+          )}
+          {importedDatasets.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              {importedDatasets.map(d => (
+                <div key={`${d.year}::${d.type}`} className="flex items-center justify-between text-xs">
+                  <span className="text-stone-500">
+                    <span className="font-semibold text-stone-700">{d.year} {d.type === 'CAREER' ? 'Career' : 'Single Year'}</span>
+                    {' — '}{d.count.toLocaleString()} rows · imported {fmtDate(d.importedAt)}
+                  </span>
+                  <button
+                    onClick={() => onRemoveImport(d.year, d.type)}
+                    className="text-stone-300 hover:text-red-600 font-mono transition-colors"
+                  >
+                    remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FilterSelect({ label, value, onChange, options, disabled }) {
   return (
     <div>
@@ -473,12 +560,14 @@ function FilterSelect({ label, value, onChange, options, disabled }) {
 }
 
 export default function TopScientistsView({
-  status, filters, rows, count, capped, error, page, totalPages, onLoad, onSetFilters, onGoToPage, onSelect,
+  status, filters, rows, count, capped, error, offline, page, totalPages, onLoad, onSetFilters, onGoToPage, onSelect,
   scanStatus, scanResult, onCheckForUpdates,
+  importedDatasets, importStatus, importError, onImportFile, onRemoveImport,
 }) {
   const [authInput, setAuthInput] = useState(filters.authfull);
   const [instInput, setInstInput] = useState(filters.inst_name);
-  const facets = useMergedFacets();
+  const [facetsVersion, setFacetsVersion] = useState(0);
+  const facets = useMergedFacets(facetsVersion);
 
   const subfield1Options = filters.sm_field ? (TOPSCI_FIELD_SUBFIELDS[filters.sm_field] || []) : facets.allSubfields;
 
@@ -553,6 +642,21 @@ export default function TopScientistsView({
       {scanStatus === 'error' && (
         <div className="mb-4 border border-amber-200 bg-amber-50 p-3 rounded text-xs text-amber-700 font-mono">{error}</div>
       )}
+
+      {offline && (
+        <div className="mb-4 border border-amber-200 bg-amber-50 p-3 rounded text-xs text-amber-700 font-mono">
+          Live lookup unavailable — showing your imported offline copy for {filters.year} {filters.type === 'CAREER' ? 'Career' : 'Single Year'}.
+        </div>
+      )}
+
+      <ImportPanel
+        importedDatasets={importedDatasets}
+        importStatus={importStatus}
+        importError={importError}
+        onImportFile={onImportFile}
+        onRemoveImport={onRemoveImport}
+        onImported={() => setFacetsVersion(v => v + 1)}
+      />
 
       {capped && (
         <div className="mb-4 border border-amber-200 bg-amber-50 p-3 rounded text-xs text-amber-700 font-mono">
