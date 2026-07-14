@@ -100,10 +100,18 @@ async function fetchBio(name, inst, field, subfield) {
   } catch { return null; }
 }
 
-// "Last, First M." -> "First M. Last" — reads better to OpenAlex's author search
-function toSearchName(authfull) {
+// "Last, First M." -> ["First M. Last", "First Last"] — a stored middle
+// initial can make OpenAlex's search come up empty or garbage even when the
+// person is indexed under their plain name; confirmed live ("Barry R. Simon"
+// -> one garbage result; "Barry Simon" -> correct Caltech match, top hit).
+function toSearchNames(authfull) {
   const parts = authfull.split(',').map(s => s.trim());
-  return parts.length === 2 ? `${parts[1]} ${parts[0]}` : authfull;
+  if (parts.length !== 2) return [authfull];
+  const [last, firstPart] = parts;
+  const full = `${firstPart} ${last}`;
+  const firstToken = firstPart.split(/\s+/)[0];
+  const short = `${firstToken} ${last}`;
+  return short === full ? [full] : [full, short];
 }
 
 // Generic institutional words ("university", "college", "institute"...) would
@@ -131,22 +139,37 @@ function institutionOverlap(a, b) {
 // Works" panel uses) — tried before Scholar/SerpAPI since it needs no key,
 // isn't quota-limited the same way, and disambiguates by institution rather
 // than a fuzzy title/author text search.
+// A candidate with neither an institution match nor meaningful citations is
+// not a confident match — confirmed live: a lone garbage author record (a
+// mangled bulk-list entity, 0 citations) was otherwise the only "result" for
+// an exact-name search and got shown as if it were correct.
+const MIN_CONFIDENT_CITATIONS = 100;
+
 async function fetchOpenAlexPublications(authfull, instName) {
   try {
-    const searchName = toSearchName(authfull);
-    const params = new URLSearchParams({ search: searchName, 'per-page': '5', mailto: 'praveen.jay80@gmail.com' });
-    const res = await fetch(`https://api.openalex.org/authors?${params}${openAlexAuth()}`);
-    if (!res.ok) return { ok: false, results: [] };
-    const data = await res.json();
-    const candidates = data.results || [];
+    const searchNames = toSearchNames(authfull);
+    const responses = await Promise.all(searchNames.map(name => {
+      const params = new URLSearchParams({ search: name, 'per-page': '5', mailto: 'praveen.jay80@gmail.com' });
+      return fetch(`https://api.openalex.org/authors?${params}${openAlexAuth()}`).then(r => r.ok ? r.json() : null);
+    }));
+    const candidates = [];
+    const seen = new Set();
+    for (const data of responses) {
+      for (const c of (data?.results || [])) {
+        if (!seen.has(c.id)) { seen.add(c.id); candidates.push(c); }
+      }
+    }
     if (candidates.length === 0) return { ok: false, results: [] };
 
-    let best = candidates[0];
-    let bestScore = -1;
+    let best = null, bestScore = -1, bestOverlap = 0;
     for (const c of candidates) {
       const inst = c.last_known_institutions?.[0]?.display_name || c.affiliations?.[0]?.institution?.display_name || '';
-      const score = institutionOverlap(inst, instName) * 100 + Math.log10((c.cited_by_count || 0) + 1);
-      if (score > bestScore) { bestScore = score; best = c; }
+      const overlap = institutionOverlap(inst, instName);
+      const score = overlap * 100 + Math.log10((c.cited_by_count || 0) + 1);
+      if (score > bestScore) { bestScore = score; best = c; bestOverlap = overlap; }
+    }
+    if (bestOverlap === 0 && (best.cited_by_count || 0) < MIN_CONFIDENT_CITATIONS) {
+      return { ok: false, results: [] };
     }
 
     const authorId = best.id.replace('https://openalex.org/', '');
@@ -161,7 +184,10 @@ async function fetchOpenAlexPublications(authfull, instName) {
       title: w.display_name, year: w.publication_year, citationCount: w.cited_by_count,
       link: w.doi || null,
     }));
-    return { ok: results.length > 0, results, source: 'openalex' };
+    return {
+      ok: results.length > 0, results, source: 'openalex',
+      authorProfileUrl: `https://openalex.org/works?filter=author.id:${authorId}&sort=cited_by_count:desc`,
+    };
   } catch { return { ok: false, results: [] }; }
 }
 
@@ -349,11 +375,18 @@ function ScientistDetail({ row, year, type, onSelect }) {
       </div>
 
       {/* Links + mode picker */}
-      <div className="flex items-center gap-4 pt-1">
+      <div className="flex items-center gap-4 pt-1 flex-wrap">
         <a href={pseUrl(year, type, row.id)} target="_blank" rel="noreferrer"
           className="text-xs text-stone-400 hover:text-blue-600 flex items-center gap-1 font-mono">
           View on PASE <ExternalIcon />
         </a>
+        {pubs?.authorProfileUrl && (
+          <a href={pubs.authorProfileUrl} target="_blank" rel="noreferrer"
+            className="text-xs text-stone-400 hover:text-blue-600 flex items-center gap-1 font-mono"
+            title="All works by this matched OpenAlex author, sorted by citations — verify this is the right person">
+            OpenAlex Works (by citations) <ExternalIcon />
+          </a>
+        )}
         <a href={scholarProfileSearchUrl(row.authfull)} target="_blank" rel="noreferrer"
           className="text-xs text-stone-400 hover:text-blue-600 flex items-center gap-1 font-mono">
           Google Scholar <ExternalIcon />
