@@ -253,6 +253,210 @@ app.get('/api/udc-new-terms', async (req, res) => {
   }
 });
 
+// ── World's Top 2% Scientists proxy (pasanhu.cn) ─────────────────────────────
+// Mirrors the official Stanford/Elsevier "World's Top 2% Scientists" dataset
+// (Ioannidis et al., Mendeley Data DOI 10.17632/btchxktzyw) via pasanhu.cn's
+// live ASMX JSON service (HSSrv.asmx). The service needs a bearer token that
+// is embedded in the site's own page HTML — regenerated on every page load
+// but not tied to a login — so it's fetched here server-side and cached
+// briefly, with a forced refresh on 401.
+
+const PASANHU_BASE = 'https://www.pasanhu.cn';
+const PASANHU_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+let pasanhuToken = null;
+let pasanhuTokenAt = 0;
+const PASANHU_TOKEN_TTL = 5 * 60 * 1000;
+
+async function getPasanhuToken(force = false) {
+  if (!force && pasanhuToken && Date.now() - pasanhuTokenAt < PASANHU_TOKEN_TTL) return pasanhuToken;
+  const r = await fetch(`${PASANHU_BASE}/WorldTopScientists.aspx`, { headers: { 'User-Agent': PASANHU_UA } });
+  const html = await r.text();
+  const m = html.match(/main\.render\("([^"]+)"/);
+  if (!m) throw new Error('Could not extract pasanhu.cn auth token');
+  pasanhuToken = m[1];
+  pasanhuTokenAt = Date.now();
+  return pasanhuToken;
+}
+
+async function pasanhuPost(fn, body, retry = true) {
+  const token = await getPasanhuToken();
+  const r = await fetch(`${PASANHU_BASE}/HSSrv.asmx/${fn}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json;charset=utf-8',
+      'Authorization': token,
+      'User-Agent': PASANHU_UA,
+    },
+    body: JSON.stringify(body),
+  });
+  if (r.status === 401 && retry) {
+    await getPasanhuToken(true);
+    return pasanhuPost(fn, body, false);
+  }
+  if (!r.ok) throw new Error(`pasanhu.cn HTTP ${r.status}`);
+  const json = await r.json();
+  if (json?.d?.code !== 0) throw new Error(json?.d?.msg || 'pasanhu.cn error');
+  return json.d;
+}
+
+async function pasanhuPostRetry(fn, body, attempt = 0) {
+  try {
+    return await pasanhuPost(fn, body);
+  } catch (e) {
+    if (attempt < 3) {
+      await new Promise(res => setTimeout(res, 1500 * (attempt + 1)));
+      return pasanhuPostRetry(fn, body, attempt + 1);
+    }
+    throw e;
+  }
+}
+
+function pasanhuYY(year) { return String(year).slice(-2); }
+
+// Field names differ by year (single-year citations, h-index, hm-index all
+// carry the 2-digit year in their key) and by type (career citations sum
+// from 1996 rather than the single year) — see CLAUDE.md for the derivation.
+function pasanhuMetricColumns(year, type) {
+  const y = pasanhuYY(year);
+  const nc = type === 'CAREER' ? `nc96${y} (ns)` : `nc${y}${y} (ns)`;
+  return {
+    rank: 'rank (ns)',
+    citations: nc,
+    hindex: `h${y} (ns)`,
+    hmindex: `hm${y} (ns)`,
+    papers: `np60${y}`,
+    composite: 'c (ns)',
+    selfpct: 'self%',
+  };
+}
+
+const PASANHU_BASE_COLS = ['authfull', 'inst_name', 'cntry', 'sm-field', 'sm-subfield-1', 'sm-subfield-2'];
+const PASANHU_METRIC_ORDER = ['rank', 'citations', 'hindex', 'hmindex', 'papers', 'composite', 'selfpct'];
+
+function pasanhuBuildColumns(year, type) {
+  const m = pasanhuMetricColumns(year, type);
+  const columns = [...PASANHU_BASE_COLS, ...PASANHU_METRIC_ORDER.map(k => m[k])];
+  const metricIndex = Object.fromEntries(PASANHU_METRIC_ORDER.map((k, i) => [k, PASANHU_BASE_COLS.length + i]));
+  return { columns, metricIndex };
+}
+
+function pasanhuRowToObject(row, metricIndex) {
+  const [authfull, inst_name, cntry, field, subfield1, subfield2] = row.values;
+  const num = (i) => { const v = parseFloat(row.values[i]); return Number.isFinite(v) ? v : null; };
+  return {
+    id: row.id, authfull, inst_name, cntry, field, subfield1, subfield2,
+    rank: num(metricIndex.rank),
+    citations: num(metricIndex.citations),
+    hindex: num(metricIndex.hindex),
+    hmindex: num(metricIndex.hmindex),
+    papers: num(metricIndex.papers),
+    composite: num(metricIndex.composite),
+    selfpct: num(metricIndex.selfpct),
+  };
+}
+
+const pasanhuQueryCache = new Map(); // key -> { rows, total, capped, ts }
+const PASANHU_CACHE_TTL = 10 * 60 * 1000;
+const PASANHU_FETCH_ALL_CAP = 30000;
+// pasanhu.cn's ASMX service has an undocumented response-size limit that
+// scales with column count, not just row count — a 13-column query (our
+// full metric set) 500s above ~300-400 rows/page even though a 1-column
+// query handles 1000 fine. 250 stays safely under that threshold.
+const PASANHU_UPSTREAM_PAGE = 250;
+const PASANHU_FETCH_CONCURRENCY = 8;
+
+function pasanhuPruneCache() {
+  if (pasanhuQueryCache.size <= 40) return;
+  const oldestKey = [...pasanhuQueryCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0]?.[0];
+  if (oldestKey) pasanhuQueryCache.delete(oldestKey);
+}
+
+app.get('/api/topsci/query', async (req, res) => {
+  try {
+    const year = req.query.year || '2024';
+    const type = req.query.type === 'CAREER' ? 'CAREER' : '';
+    const sm_field = req.query.sm_field || '';
+    const sm_subfield_1 = req.query.sm_subfield_1 || '';
+    const sm_subfield_2 = req.query.sm_subfield_2 || '';
+    const cntry = req.query.cntry || '';
+    const authfull = req.query.authfull || '';
+    const inst_name = req.query.inst_name || '';
+    const sortBy = PASANHU_METRIC_ORDER.includes(req.query.sortBy) ? req.query.sortBy : 'rank';
+    const sortDir = req.query.sortDir === 'desc' ? 'desc' : 'asc';
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 25));
+
+    const { columns, metricIndex } = pasanhuBuildColumns(year, type);
+    const baseArgs = { year: String(year), type, authfull, inst_name, cntry, sm_field, sm_subfield_1, sm_subfield_2, column: columns };
+
+    // Native order (rank ascending == composite score descending, excl.
+    // self-citations) is exactly what pasanhu.cn already returns — a cheap
+    // single-request passthrough with no local sorting needed.
+    const isNativeOrder = sortBy === 'rank' && sortDir === 'asc';
+    if (isNativeOrder) {
+      const d = await pasanhuPostRetry('QueryWPData2', { ...baseArgs, page, limit });
+      const rows = d.data.map(r => pasanhuRowToObject(r, metricIndex));
+      return res.json({ count: d.count, page, limit, rows, capped: false });
+    }
+
+    // Any other sort requires pulling the full filtered set and sorting
+    // locally — pasanhu.cn exposes no sort parameter. Capped + cached since
+    // an unfiltered custom sort would otherwise mean pulling all ~230k rows
+    // on every request.
+    const cacheKey = JSON.stringify({ year, type, sm_field, sm_subfield_1, sm_subfield_2, cntry, authfull, inst_name, sortBy, sortDir });
+    let entry = pasanhuQueryCache.get(cacheKey);
+    if (!entry || Date.now() - entry.ts > PASANHU_CACHE_TTL) {
+      const first = await pasanhuPostRetry('QueryWPData2', { ...baseArgs, page: 1, limit: PASANHU_UPSTREAM_PAGE });
+      const total = first.count;
+      const capped = total > PASANHU_FETCH_ALL_CAP;
+      const fetchCount = Math.min(total, PASANHU_FETCH_ALL_CAP);
+      const totalPages = Math.ceil(fetchCount / PASANHU_UPSTREAM_PAGE);
+      const allRows = first.data.map(r => pasanhuRowToObject(r, metricIndex));
+
+      for (let batchStart = 2; batchStart <= totalPages; batchStart += PASANHU_FETCH_CONCURRENCY) {
+        const batch = [];
+        for (let p = batchStart; p < batchStart + PASANHU_FETCH_CONCURRENCY && p <= totalPages; p++) batch.push(p);
+        const results = await Promise.all(batch.map(p => pasanhuPostRetry('QueryWPData2', { ...baseArgs, page: p, limit: PASANHU_UPSTREAM_PAGE })));
+        for (const d of results) allRows.push(...d.data.map(r => pasanhuRowToObject(r, metricIndex)));
+      }
+
+      allRows.sort((a, b) => {
+        const av = a[sortBy], bv = b[sortBy];
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return sortDir === 'desc' ? bv - av : av - bv;
+      });
+
+      entry = { rows: allRows, total, capped, ts: Date.now() };
+      pasanhuQueryCache.set(cacheKey, entry);
+      pasanhuPruneCache();
+    }
+
+    const startIdx = (page - 1) * limit;
+    const pageRows = entry.rows.slice(startIdx, startIdx + limit);
+    res.json({ count: entry.total, page, limit, rows: pageRows, capped: entry.capped });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+app.get('/api/topsci/detail', async (req, res) => {
+  try {
+    const year = req.query.year || '2024';
+    const type = req.query.type === 'CAREER' ? 'CAREER' : '';
+    const id = parseInt(req.query.id, 10);
+    if (!Number.isFinite(id)) throw new Error('Missing or invalid id');
+    const d = await pasanhuPostRetry('GetWPData', { year: String(year), type, id });
+    const keys = d.data.keys;
+    const values = d.data.data.values;
+    const record = keys.map((k, i) => ({ field: k.field, description: k.description, value: values[i + 1] }));
+    res.json({ id, record });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
 // ── Generic HTML proxy (scan-for-updates in OntologicalAtlas, Academia, ScienceDirect) ──
 
 app.get('/api/html-proxy', async (req, res) => {

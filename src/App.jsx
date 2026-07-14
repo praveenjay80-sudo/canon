@@ -59,6 +59,8 @@ import OntologicalAtlasView from './components/OntologicalAtlasView';
 import { useOntologicalAtlas } from './hooks/useOntologicalAtlas';
 import MostTaughtView from './components/MostTaughtView';
 import { useMostTaught } from './hooks/useMostTaught';
+import TopScientistsView from './components/TopScientistsView';
+import { useTopScientists } from './hooks/useTopScientists';
 
 import UnifiedTaxonomySelector from './components/UnifiedTaxonomySelector';
 import UnifiedKnowledgePane from './components/UnifiedKnowledgePane';
@@ -184,12 +186,13 @@ export default function App() {
   const scienceDirect = useScienceDirectTopics();
   const oAtlas = useOntologicalAtlas();
   const mostTaught = useMostTaught();
+  const topScientists = useTopScientists();
   const unified = useUnifiedBrowser();
   const [inputTopic, setInputTopic] = useState('');
   const [shake, setShake] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [view, setView] = useState('canon');
-  const [appMode, setAppMode] = useState('canon'); // 'canon' | 'reverse' | 'curriculum' | 'doctoral' | 'dissertation' | 'drift' | 'consilience' | 'inquiry' | 'spectrum' | 'deepdive' | 'pulse' | 'intelligence' | 'math' | 'concepts' | 'udc' | 'academia' | 'overall' | 'sciencedirect' | 'ontologicalatlas' | 'mosttaught' | 'unified'
+  const [appMode, setAppMode] = useState('canon'); // 'canon' | 'reverse' | 'curriculum' | 'doctoral' | 'dissertation' | 'drift' | 'consilience' | 'inquiry' | 'spectrum' | 'deepdive' | 'pulse' | 'intelligence' | 'math' | 'concepts' | 'udc' | 'academia' | 'overall' | 'sciencedirect' | 'ontologicalatlas' | 'mosttaught' | 'topscientists' | 'unified'
 
   const parsed = useMemo(() => parseCanon(gen.content), [gen.content]);
 
@@ -521,6 +524,16 @@ export default function App() {
                   MOST TAUGHT
                 </button>
                 <button
+                  onClick={() => { setAppMode('topscientists'); if (topScientists.status === 'idle') topScientists.load(); }}
+                  className={`px-4 py-2.5 text-sm font-mono -mb-px transition-colors ${
+                    appMode === 'topscientists'
+                      ? 'border-b-2 border-red-600 text-red-700 font-semibold'
+                      : 'border-b-2 border-transparent text-red-500 hover:text-red-700'
+                  }`}
+                >
+                  TOP SCIENTISTS
+                </button>
+                <button
                   onClick={() => setAppMode('overall')}
                   className={`ml-4 px-5 py-2 text-sm font-mono font-bold -mb-px transition-all ${
                     appMode === 'overall'
@@ -582,6 +595,8 @@ export default function App() {
                   ? 'Ontological Atlas — 208 schools of thought, 1,888 classified works, 461 thinker personas, and 57 ethical dilemmas. Six ontological dimensions: Time, Space, Matter, Observer, Energy, Information. Click any entry to generate a canon, curriculum, or reading path.'
                   : appMode === 'mosttaught'
                   ? 'Open Syllabus Project — the most-taught works across 9.4 million university course syllabi. Browse by discipline and field, filter by subfield, or search across all titles. Click any work to generate a reading list, curriculum, or research path.'
+                  : appMode === 'topscientists'
+                  ? "World's Top 2% Scientists — Stanford/Elsevier's citation-metrics ranking (Ioannidis et al.), queried live for the last 5 years, Single-Year or Career editions. Filter by field, subfield, country, author, or institution; sort by any metric. Click a scientist for a bio, key metrics, and most-cited publications."
                   : appMode === 'unified'
                   ? 'One taxonomy for all human knowledge. Pick any field, subfield, or topic — get everything: fundamental questions, complete concept map, schools of thought, prerequisite path, canonical works by learning stage, key researchers, methodologies, adjacent fields, consilience across disciplines, open problems and controversies, intellectual timeline, and key conferences & journals. All sections stream in parallel from 8 live data sources.'
                   : ''}
@@ -1307,6 +1322,24 @@ export default function App() {
                 crawlDate={mostTaught.crawlDate}
                 error={mostTaught.error}
                 onLoad={mostTaught.load}
+                onSelect={handleDoctoralTopicClick}
+              />
+            )}
+
+            {/* World's Top 2% Scientists */}
+            {appMode === 'topscientists' && (
+              <TopScientistsView
+                status={topScientists.status}
+                filters={topScientists.filters}
+                rows={topScientists.rows}
+                count={topScientists.count}
+                capped={topScientists.capped}
+                error={topScientists.error}
+                page={topScientists.page}
+                totalPages={topScientists.totalPages}
+                onLoad={topScientists.load}
+                onSetFilters={topScientists.setFilters}
+                onGoToPage={topScientists.goToPage}
                 onSelect={handleDoctoralTopicClick}
               />
             )}
